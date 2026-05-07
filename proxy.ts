@@ -6,7 +6,7 @@ export async function proxy(request: NextRequest) {
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() { return request.cookies.getAll() },
@@ -15,19 +15,26 @@ export async function proxy(request: NextRequest) {
             request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options))
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              httpOnly: true,
+              secure: true, // always true — Vercel always uses HTTPS
+              sameSite: 'lax',
+            })
+          )
         }
       }
     }
   )
 
+
   const { data: { user } } = await supabase.auth.getUser()
+  const path = request.nextUrl.pathname
 
   const protectedRoutes = ['/dashboard', '/ballot', '/candidates', '/verify']
-  const adminRoutes = ['/admin']
+  const adminRoutes = ['/admin/dashboard', '/admin/candidates', '/admin/voters', '/admin/settings']
   const authRoutes = ['/login', '/register']
-  const path = request.nextUrl.pathname
-  const publicRoutes = ['/reset-password']
+  const publicRoutes = ['/reset-password', '/home', '/auth/callback', '/api', '/manifestos']
 
 // Add this check before the protected routes check
 if (publicRoutes.some(r => path.startsWith(r))) {
