@@ -313,7 +313,7 @@ async function handleResend() {
     onClick={async (e) => {
       e.preventDefault()
       if (!email) {
-        setError('Enter your email above first.')
+        setError('Enter your Student ID first.')
         return
       }
       const supabase = createClient()
