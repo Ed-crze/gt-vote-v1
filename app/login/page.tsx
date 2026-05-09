@@ -45,6 +45,11 @@ const [pendingProfile, setPendingProfile] = useState<{ name: string; faculty: st
  useEffect(() => {
   const id = searchParams.get('id')
   if (id) setEmail(id.toLowerCase().trim().split('@')[0])
+
+  const err = searchParams.get('error')
+  if (err === 'invalid-reset-link') {
+    setError('Your password reset link is invalid or has expired. Please try again.')
+  }
 }, [searchParams])
   const triggerShake = () => {
     setShake(true)
