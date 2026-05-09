@@ -18,7 +18,6 @@ export async function registerStudent({
   const email = `${studentId.toLowerCase().trim()}@live.gctu.edu.gh`
   const hash = await hashStudentId(studentId)
 
-  // Supabase trigger handles students + voter_registry insert automatically
   const { data, error: signUpError } = await supabase.auth.signUp({
     email,
     password,
@@ -29,33 +28,55 @@ export async function registerStudent({
         full_name: fullName,
         faculty,
         level,
-        student_id_hash: hash, // passed to trigger for voter_registry
+        student_id_hash: hash,
       }
     }
   })
+
   if (signUpError) throw signUpError
 
-  if (data.user) {
-    const { error: profileError } = await supabase
-      .from('students')
-      .insert({
-        id: data.user.id,
-        student_id: studentId.toUpperCase().trim(),
-        full_name: fullName,
-        email,
-        faculty,
-        level,
-      })
-    if (profileError) throw profileError
-
-    const hash = await hashStudentId(studentId)
-    const { error: registryError } = await supabase
-      .from('voter_registry')
-      .insert({ student_id_hash: hash, has_voted: false })
-    if (registryError) throw registryError
+  // Detect confirmed duplicate
+  if (data.user && data.user.identities?.length === 0) {
+    throw new Error('already registered')
   }
 
   return data
+}
+
+export async function createStudentProfile({
+  userId,
+  studentId,
+  fullName,
+  email,
+  faculty,
+  level,
+}: {
+  userId: string
+  studentId: string
+  fullName: string
+  email: string
+  faculty: string
+  level: string
+}) {
+  const supabase = createClient()
+
+  const { error: profileError } = await supabase
+    .from('students')
+    .insert({
+      id: userId,
+      student_id: studentId.toUpperCase().trim(),
+      full_name: fullName,
+      email,
+      faculty,
+      level,
+    })
+  if (profileError) throw profileError
+
+  const hash = await hashStudentId(studentId)
+  const { error: registryError } = await supabase
+    .from('voter_registry')
+    .insert({ student_id_hash: hash, has_voted: false })
+  if (registryError) throw registryError
 }
 
 export async function loginStudent(email: string, password: string) {
@@ -67,7 +88,6 @@ export async function loginStudent(email: string, password: string) {
 
 export async function signOut() {
   const supabase = createClient()
-  // Sign out from ALL sessions, not just current one
   await supabase.auth.signOut({ scope: 'global' })
 }
 
