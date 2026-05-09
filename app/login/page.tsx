@@ -310,21 +310,30 @@ async function handleResend() {
   <a
     href="#"
     className="forgot-link"
-    onClick={async (e) => {
-      e.preventDefault()
-      if (!email) {
-        setError('Enter your Student ID first.')
-        return
-      }
-      const supabase = createClient()
-      await supabase.auth.resetPasswordForEmail(
-        email.toLowerCase().trim(),
-        {
-          redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-        }
-      )
-      alert('Password reset email sent. Check your GCTU inbox.')
-    }}
+   onClick={async (e) => {
+  e.preventDefault()
+  if (!email) {
+    setError('Enter your Student ID first.')
+    triggerShake()
+    return
+  }
+  const idPart = email.toLowerCase().trim().split('@')[0]
+  const constructedEmail = `${idPart}@live.gctu.edu.gh`
+  
+  const supabase = createClient()
+  const { error } = await supabase.auth.resetPasswordForEmail(
+    constructedEmail,
+    {
+      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+    }
+  )
+  if (error) {
+    setError('Failed to send reset email. Please try again.')
+    triggerShake()
+  } else {
+    alert('Password reset email sent. Check your GCTU inbox.')
+  }
+}}
   >
     Click here to do a password reset
   </a>.
