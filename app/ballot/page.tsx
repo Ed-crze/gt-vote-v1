@@ -118,6 +118,7 @@ export default function BallotPage() {
     // Call the submit_vote database function
     const { data: receipt, error } = await supabase
       .rpc('submit_vote', {
+        p_student_id_hash: hash,
         p_votes: votes,
       })
 
