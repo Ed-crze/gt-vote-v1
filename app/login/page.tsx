@@ -309,7 +309,19 @@ async function handleResend() {
                 </span>
               ) : 'SIGN IN'}
             </button>
-            
+
+            <p className="forgot-text">
+              Forgot your password?{' '}
+              <button
+                onClick={() => navigateTo('/forgot-password')}
+                className="forgot-link"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', padding: 0 }}
+              >
+                Click here to do a password reset
+              </button>.
+            </p>
+
+
             <div className="security-badge">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
