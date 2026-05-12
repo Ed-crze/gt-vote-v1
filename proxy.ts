@@ -34,40 +34,35 @@ export async function proxy(request: NextRequest) {
   const protectedRoutes = ['/dashboard', '/ballot', '/candidates', '/verify']
   const adminRoutes = ['/admin/dashboard', '/admin/candidates', '/admin/voters', '/admin/settings']
   const authRoutes = ['/login', '/register']
-  const publicRoutes = ['/reset-password', '/home', '/auth/callback', '/api', '/manifestos']
+  const publicRoutes = ['/reset-password', '/forgot-password', '/home', '/auth/callback', '/api', '/manifestos']
 
 // Add this check before the protected routes check
 if (publicRoutes.some(r => path.startsWith(r))) {
   return supabaseResponse
 }
 
-  // Not logged in trying to access protected route → send to login
   if (!user && protectedRoutes.some(r => path.startsWith(r))) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    const url = new URL('/login', request.url)
+    url.searchParams.set('redirectTo', path)
+    return NextResponse.redirect(url)
   }
 
-  // Logged in trying to access login/register → send to dashboard
   if (user && authRoutes.some(r => path.startsWith(r))) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // Admin routes → handled separately in Step 5
-
   if (adminRoutes.some(r => path.startsWith(r))) {
-  if (!user) return NextResponse.redirect(new URL('/admin', request.url))
-
-  const role = user.app_metadata?.role
-  if (role !== 'admin') {
-    return NextResponse.redirect(new URL('/login', request.url))
+    if (!user) return NextResponse.redirect(new URL('/admin', request.url))
+    if (user.app_metadata?.role !== 'admin') {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
   }
-}
 
-return supabaseResponse
-
+  return supabaseResponse
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|gctu-crest.png|campus-bg.jpg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|pdf|ico)$).*)',
   ],
 }

@@ -309,42 +309,7 @@ async function handleResend() {
                 </span>
               ) : 'SIGN IN'}
             </button>
-
-            <p className="forgot-text">
-  Forgot your password?{' '}
-  <a
-    href="#"
-    className="forgot-link"
-   onClick={async (e) => {
-  e.preventDefault()
-  if (!email) {
-    setError('Enter your Student ID first.')
-    triggerShake()
-    return
-  }
-  const idPart = email.toLowerCase().trim().split('@')[0]
-  const constructedEmail = `${idPart}@live.gctu.edu.gh`
-  
-  const supabase = createClient()
-  const { error } = await supabase.auth.resetPasswordForEmail(
-    constructedEmail,
-    {
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
-    }
-  )
-  if (error) {
-    setError('Failed to send reset email. Please try again.')
-    triggerShake()
-  } else {
-    alert('Password reset email sent. Check your GCTU inbox.')
-  }
-}}
-  >
-    Click here to do a password reset
-  </a>.
-</p>
-              
-
+            
             <div className="security-badge">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
