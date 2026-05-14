@@ -78,16 +78,8 @@ export default function ForgotPasswordPage() {
           </div>
         </div>
 
-        <div className="register-body">
+        <div className="register-body"> 
           {/* Key icon */}
-          <div style={{
-            width: '52px', height: '52px', borderRadius: '14px',
-            background: 'rgba(27,42,94,0.08)',
-            border: '1px solid rgba(27,42,94,0.15)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            marginBottom: '16px', fontSize: '22px',
-          }}>🔑</div>
-
           <h1 className="register-title">
             Forgot your <span className="register-title-accent">Password?</span>
           </h1>
@@ -217,11 +209,7 @@ export default function ForgotPasswordPage() {
             {/* Gold divider */}
             <div style={{ height: '2px', background: 'linear-gradient(to right, #C9A227, #E8C547, #C9A227)', borderRadius: '2px', marginBottom: '1.25rem' }} />
 
-            <button
-              onClick={() => { setShowPopup(false); navigateTo('/login') }}
-              className="btn-signin"
-              style={{ width: '100%' }}
-            >
+            <button onClick={() => { setShowPopup(false); navigateTo('/login') }} className="btn-signin" style={{ width: '100%' }} >
               Back to Sign In
             </button>
 
