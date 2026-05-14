@@ -166,14 +166,6 @@ export default function ResetPasswordPage() {
           <div className="register-body">
 
             {/* Key icon */}
-            <div style={{
-              width: '48px', height: '48px', borderRadius: '12px',
-              background: 'rgba(27,42,94,0.08)',
-              border: '1px solid rgba(27,42,94,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              marginBottom: '14px', fontSize: '20px',
-            }}>🔑</div>
-
             <h1 className="register-title">
               Reset your <span className="register-title-accent">Password</span>
             </h1>
