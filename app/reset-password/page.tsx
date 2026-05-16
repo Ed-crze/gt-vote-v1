@@ -298,7 +298,11 @@ export default function ResetPasswordPage() {
 
             <p className="forgot-text" style={{ marginTop: '1rem', textAlign: 'center' }}>
               <button
-                onClick={() => router.push('/login')}
+                onClick={async () => {
+                  const supabase = createClient()
+                  await supabase.auth.signOut({ scope: 'global' })
+                  router.push('/login')
+                }}
                 className="forgot-link"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', padding: 0 }}
               >
