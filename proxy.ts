@@ -39,7 +39,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const protectedRoutes = ['/dashboard', '/ballot', '/candidates', '/verify']
-  const adminRoutes = ['/admin/dashboard', '/admin/candidates', '/admin/voters', '/admin/settings']
+  const adminRoutes = ['/admin/verify','/admin/dashboard', '/admin/candidates', '/admin/voters', '/admin/settings']
   const authRoutes = ['/login', '/register']
   const publicRoutes = ['/reset-password', '/forgot-password', '/home', '/auth/callback', '/api', '/manifestos','/admin']
 
