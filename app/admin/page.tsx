@@ -86,6 +86,7 @@ export default function AdminLoginPage() {
     setTimeout(() => navigateTo('/admin/dashboard'), 800)
 
   } catch {
+    console.error('Login error:',error)
     setLoading(false)
     setError('Something went wrong. Please try again.')
     triggerShake()
