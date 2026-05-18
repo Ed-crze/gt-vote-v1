@@ -28,13 +28,20 @@ export async function proxy(request: NextRequest) {
   )
 
 
+  
+
   const { data: { user } } = await supabase.auth.getUser()
   const path = request.nextUrl.pathname
+   
+
+   if (path === '/') {
+    return NextResponse.redirect(new URL('/home', request.url))
+  }
 
   const protectedRoutes = ['/dashboard', '/ballot', '/candidates', '/verify']
   const adminRoutes = ['/admin/dashboard', '/admin/candidates', '/admin/voters', '/admin/settings']
   const authRoutes = ['/login', '/register']
-  const publicRoutes = ['/reset-password', '/forgot-password', '/home', '/auth/callback', '/api', '/manifestos']
+  const publicRoutes = ['/reset-password', '/forgot-password', '/home', '/auth/callback', '/api', '/manifestos','/admin']
 
 // Add this check before the protected routes check
 if (publicRoutes.some(r => path.startsWith(r))) {
