@@ -5,7 +5,6 @@ import { useNavigate } from '@/lib/hooks'
 import { createClient } from '@/lib/supabase/client'
 import { signOut } from '@/lib/auth-client'
 import PageBackground from '@/components/PageBackground'
-import { FACULTY_LEADERBOARD } from '@/lib/data'
 
 export default function DashboardPage() {
   const { navigateTo, fadingOut } = useNavigate()
@@ -16,6 +15,18 @@ export default function DashboardPage() {
   voted: boolean
   receiptCode: string | null
 } | null>(null)
+
+const [leaderboard, setLeaderboard] = useState<{
+  name: string
+  pct: number
+  total: number
+  rank: number
+}[]>([])
+
+const [totalVoted, setTotalVoted] = useState(0)
+const [totalRegistered, setTotalRegistered] = useState(0)
+const [turnoutPct, setTurnoutPct] = useState(0)
+
   const [countdown, setCountdown] = useState('14:00:00')
   const [urgent, setUrgent] = useState(false)
   const [showAnnouncement, setShowAnnouncement] = useState(true)
@@ -28,6 +39,7 @@ export default function DashboardPage() {
   const [turnoutOffset, setTurnoutOffset] = useState(163.36)
   const endRef = useRef(Date.now() + 14 * 3600 * 1000)
   const notifRef = useRef<HTMLDivElement>(null)
+
 
  useEffect(() => {
   const supabase = createClient()
@@ -76,7 +88,66 @@ export default function DashboardPage() {
     receiptCode,
   })
 
-  const params = new URLSearchParams(window.location.search)
+  // Load real faculty turnout
+const { data: facultyData } = await supabase
+  .from('students')
+  .select('faculty')
+
+const { data: registryData } = await supabase
+  .from('voter_registry')
+  .select('has_voted')
+
+if (facultyData && registryData) {
+  // Count total registered and voted
+  const totalReg = facultyData.length
+  const totalVotes = registryData.filter(r => r.has_voted).length
+
+  // Count students per faculty
+  const facultyCounts: Record<string, number> = {}
+  facultyData.forEach(s => {
+    if (s.faculty) {
+      facultyCounts[s.faculty] = (facultyCounts[s.faculty] || 0) + 1
+    }
+  })
+
+  // Calculate proportional voted count per faculty
+  // Since we can't link votes to faculty (Voting Paradox),
+  // we distribute votes proportionally across faculties
+  const totalPct = totalReg > 0 ? Math.round((totalVotes / totalReg) * 100) : 0
+
+  const sorted = Object.entries(facultyCounts)
+    .map(([name, count]) => ({
+      name: name.replace('Faculty of ', ''),
+      fullName: name,
+      count,
+      // Proportional estimate of votes per faculty
+      estimatedVotes: Math.round((count / totalReg) * totalVotes),
+      pct: totalPct,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .map((f, i) => ({
+      name: f.name,
+      pct: totalPct,
+      total: f.count,
+      rank: i + 1,
+    }))
+
+  setLeaderboard(sorted)
+  setTotalRegistered(totalReg)
+  setTotalVoted(totalVotes)
+  setTurnoutPct(totalPct)
+
+  // Animate bars after data loads
+  setTimeout(() => {
+    setBarWidths(sorted.map(() => totalPct))
+    // Update turnout ring
+    const circumference = 163.36
+    const offset = circumference - (totalPct / 100) * circumference
+    setTurnoutOffset(offset)
+  }, 400)
+}
+
+const params = new URLSearchParams(window.location.search)
   if (params.get('voted') === 'true') launchConfetti()
 
   setTimeout(() => {
@@ -241,22 +312,24 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
             </div>
 
             {/* Stats */}
-            <div className="dash-stats-row">
-              <div className="dash-stat-card">
-                <div className="dash-stat-val">3,248</div>
-                <div className="dash-stat-lbl">Registered</div>
+           <div className="dash-stat-card">
+              <div className="dash-stat-val">
+                {totalRegistered > 0 ? totalRegistered.toLocaleString() : '—'}
               </div>
-              <div className="dash-stat-card">
-                <svg width="64" height="64" viewBox="0 0 64 64">
-                  <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5"/>
-                  <circle cx="32" cy="32" r="26" fill="none" stroke="#C9A227" strokeWidth="5"
-                    strokeDasharray="163.36" strokeDashoffset={turnoutOffset}
-                    strokeLinecap="round" transform="rotate(-90 32 32)"
-                    style={{ transition: 'stroke-dashoffset 1.4s ease' }}/>
-                  <text x="32" y="36" textAnchor="middle" fill="#C9A227" fontSize="12" fontWeight="900" fontFamily="Inter">67%</text>
-                </svg>
-                <div className="dash-stat-lbl">Turnout</div>
-              </div>
+              <div className="dash-stat-lbl">Registered</div>
+            <div className="dash-stat-card">
+              <svg width="64" height="64" viewBox="0 0 64 64">
+                <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
+                <circle cx="32" cy="32" r="26" fill="none" stroke="#C9A227" strokeWidth="5"
+                  strokeDasharray="163.36" strokeDashoffset={turnoutOffset}
+                  strokeLinecap="round" transform="rotate(-90 32 32)"
+                  style={{ transition: 'stroke-dashoffset 1.4s ease' }} />
+                <text x="32" y="36" textAnchor="middle" fill="#C9A227" fontSize="12" fontWeight="900" fontFamily="Inter">
+                  {turnoutPct}%
+                </text>
+              </svg>
+              <div className="dash-stat-lbl">Turnout</div>
+            </div>
               <div className="dash-stat-card">
                 <div className={`dash-stat-val ${urgent ? 'urgent' : ''}`}>{countdown}</div>
                 <div className="dash-stat-lbl">Time Left</div>
@@ -303,23 +376,35 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
             <div className="dash-lb-wrap">
               <div className="dash-section-title">Faculty Leaderboard</div>
               <div className="dash-lb-card">
-                {FACULTY_LEADERBOARD.map((f, i) => (
-                  <div key={f.name} className={`dash-lb-row ${f.rank === 1 ? 'top' : ''}`}>
-                    <div>
-                      {f.rank === 1 && <span className="dash-lb-medal gold">1</span>}
-                      {f.rank === 2 && <span className="dash-lb-medal silver">2</span>}
-                      {f.rank === 3 && <span className="dash-lb-medal bronze">3</span>}
-                      {f.rank > 3 && <span className="dash-lb-rank">{f.rank}</span>}
-                    </div>
-                    <div className="dash-lb-info">
-                      <div className="dash-lb-name">{f.name}</div>
-                      <div className="dash-lb-bar-bg">
-                        <div className={`dash-lb-bar ${f.rank === 1 ? 'gold' : 'normal'}`} style={{ width: `${barWidths[i]}%` }} />
+               {leaderboard.length === 0 ? (
+  <div style={{ textAlign: 'center', padding: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+    Loading leaderboard...
+  </div>
+) : (
+                  leaderboard.map((f, i) => (
+                    <div key={f.name} className={`dash-lb-row ${f.rank === 1 ? 'top' : ''}`}>
+                      <div>
+                        {f.rank === 1 && <span className="dash-lb-medal gold">1</span>}
+                        {f.rank === 2 && <span className="dash-lb-medal silver">2</span>}
+                        {f.rank === 3 && <span className="dash-lb-medal bronze">3</span>}
+                        {f.rank > 3 && <span className="dash-lb-rank">{f.rank}</span>}
                       </div>
+                      <div className="dash-lb-info">
+                        <div className="dash-lb-name">{f.name}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginBottom: '4px' }}>
+                          {f.total} students registered
+                        </div>
+                        <div className="dash-lb-bar-bg">
+                          <div
+                            className={`dash-lb-bar ${f.rank === 1 ? 'gold' : 'normal'}`}
+                            style={{ width: `${barWidths[i] ?? 0}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="dash-lb-pct">{f.pct}%</div>
                     </div>
-                    <div className="dash-lb-pct">{f.pct}%</div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 
