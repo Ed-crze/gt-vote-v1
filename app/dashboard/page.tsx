@@ -8,186 +8,179 @@ import PageBackground from '@/components/PageBackground'
 
 export default function DashboardPage() {
   const { navigateTo, fadingOut } = useNavigate()
+
   const [user, setUser] = useState<{
-  id: string
-  name: string
-  faculty: string
-  voted: boolean
-  receiptCode: string | null
-} | null>(null)
+    id: string
+    name: string
+    faculty: string
+    voted: boolean
+    receiptCode: string | null
+  } | null>(null)
 
-const [leaderboard, setLeaderboard] = useState<{
-  name: string
-  pct: number
-  total: number
-  rank: number
-}[]>([])
+  const [leaderboard, setLeaderboard] = useState<{
+    name: string
+    pct: number
+    total: number
+    rank: number
+  }[]>([])
 
-const [totalVoted, setTotalVoted] = useState(0)
-const [totalRegistered, setTotalRegistered] = useState(0)
-const [turnoutPct, setTurnoutPct] = useState(0)
-
+  const [totalRegistered, setTotalRegistered] = useState(0)
+  const [turnoutPct, setTurnoutPct] = useState(0)
   const [countdown, setCountdown] = useState('14:00:00')
   const [urgent, setUrgent] = useState(false)
   const [showAnnouncement, setShowAnnouncement] = useState(true)
+  const [announcement, setAnnouncement] = useState<string | null>(null)
   const [showPopup, setShowPopup] = useState(false)
   const [showNotif, setShowNotif] = useState(false)
   const [notifRead, setNotifRead] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [notifAccordion, setNotifAccordion] = useState(false)
-  const [barWidths, setBarWidths] = useState([0, 0, 0, 0, 0])
+  const [barWidths, setBarWidths] = useState<number[]>([])
   const [turnoutOffset, setTurnoutOffset] = useState(163.36)
   const endRef = useRef(Date.now() + 14 * 3600 * 1000)
   const notifRef = useRef<HTMLDivElement>(null)
 
+  useEffect(() => {
+    const supabase = createClient()
 
- useEffect(() => {
-  const supabase = createClient()
+    async function loadUser() {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) { navigateTo('/login'); return }
 
- async function loadUser() {
-  const { data: { user: authUser } } = await supabase.auth.getUser()
-  if (!authUser) { navigateTo('/login'); return }
+      const { data: profile } = await supabase
+        .from('students')
+        .select('full_name, faculty, student_id')
+        .eq('id', authUser.id)
+        .single()
 
-  const { data: profile } = await supabase
-    .from('students')
-    .select('full_name, faculty, student_id')
-    .eq('id', authUser.id)
-    .single()
+      if (!profile) {
+        const { signOut } = await import('@/lib/auth-client')
+        await signOut()
+        navigateTo('/login')
+        return
+      }
 
-  if (!profile) {
-    const { signOut } = await import('@/lib/auth-client')
-    await signOut()
-    navigateTo('/login')
-    return
-  }
+      const { hashStudentId } = await import('@/lib/auth-client')
+      const hash = await hashStudentId(profile.student_id)
 
-  // Hash student ID using the auth-client module
-  const { hashStudentId } = await import('@/lib/auth-client')
-  const hash = await hashStudentId(profile.student_id)
+      const { data: registry } = await supabase
+        .from('voter_registry')
+        .select('has_voted')
+        .eq('student_id_hash', hash)
+        .single()
 
-  // Use the same supabase instance — do not re-import
-  const { data: registry } = await supabase
-    .from('voter_registry')
-    .select('has_voted')
-    .eq('student_id_hash', hash)
-    .single()
+      const hasVoted = registry?.has_voted ?? false
+      let receiptCode = null
 
-  const hasVoted = registry?.has_voted ?? false
-  let receiptCode = null
+      if (hasVoted) {
+        const { data: ballot } = await supabase.rpc('get_receipt_for_session')
+        receiptCode = ballot ?? null
+      }
 
-  if (hasVoted) {
-    const { data: ballot } = await supabase.rpc('get_receipt_for_session')
-    receiptCode = ballot ?? null
-  }
+      setUser({
+        id: authUser.id,
+        name: profile.full_name,
+        faculty: profile.faculty,
+        voted: hasVoted,
+        receiptCode,
+      })
 
-  setUser({
-    id: authUser.id,
-    name: profile.full_name,
-    faculty: profile.faculty,
-    voted: hasVoted,
-    receiptCode,
-  })
+      // Load election settings announcement
+      const { data: settings } = await supabase
+        .from('election_settings')
+        .select('announcement, end_time')
+        .eq('id', 1)
+        .single()
 
-  // Load real faculty turnout
-const { data: facultyData } = await supabase
-  .from('students')
-  .select('faculty')
+      if (settings?.announcement) setAnnouncement(settings.announcement)
+      if (settings?.end_time) {
+        endRef.current = new Date(settings.end_time).getTime()
+      }
 
-const { data: registryData } = await supabase
-  .from('voter_registry')
-  .select('has_voted')
+      // Load real turnout data
+      const { data: facultyData } = await supabase
+        .from('students')
+        .select('faculty')
 
-if (facultyData && registryData) {
-  // Count total registered and voted
-  const totalReg = facultyData.length
-  const totalVotes = registryData.filter(r => r.has_voted).length
+      const { data: registryData } = await supabase
+        .from('voter_registry')
+        .select('has_voted')
 
-  // Count students per faculty
-  const facultyCounts: Record<string, number> = {}
-  facultyData.forEach(s => {
-    if (s.faculty) {
-      facultyCounts[s.faculty] = (facultyCounts[s.faculty] || 0) + 1
+      if (facultyData && registryData) {
+        const totalReg = facultyData.length
+        const rawVotes = registryData.filter(r => r.has_voted).length
+        // Cap votes at registered count to prevent over 100%
+        const totalVotes = Math.min(rawVotes, totalReg)
+        const pct = totalReg > 0
+          ? Math.min(Math.round((totalVotes / totalReg) * 100), 100)
+          : 0
+
+        // Count students per faculty
+        const facultyCounts: Record<string, number> = {}
+        facultyData.forEach(s => {
+          if (s.faculty) {
+            facultyCounts[s.faculty] = (facultyCounts[s.faculty] || 0) + 1
+          }
+        })
+
+        const sorted = Object.entries(facultyCounts)
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, count], i) => ({
+            name: name.replace('Faculty of ', ''),
+            pct,
+            total: count,
+            rank: i + 1,
+          }))
+
+        setLeaderboard(sorted)
+        setTotalRegistered(totalReg)
+        setTurnoutPct(pct)
+
+        // Animate after data loads
+        setTimeout(() => {
+          setBarWidths(sorted.map(() => pct))
+          const circumference = 163.36
+          setTurnoutOffset(circumference - (pct / 100) * circumference)
+        }, 400)
+      }
+
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('voted') === 'true') launchConfetti()
     }
-  })
 
-  // Calculate proportional voted count per faculty
-  // Since we can't link votes to faculty (Voting Paradox),
-  // we distribute votes proportionally across faculties
-  const totalPct = totalReg > 0 ? Math.round((totalVotes / totalReg) * 100) : 0
+    loadUser()
 
-  const sorted = Object.entries(facultyCounts)
-    .map(([name, count]) => ({
-      name: name.replace('Faculty of ', ''),
-      fullName: name,
-      count,
-      // Proportional estimate of votes per faculty
-      estimatedVotes: Math.round((count / totalReg) * totalVotes),
-      pct: totalPct,
-    }))
-    .sort((a, b) => b.count - a.count)
-    .map((f, i) => ({
-      name: f.name,
-      pct: totalPct,
-      total: f.count,
-      rank: i + 1,
-    }))
+    // Countdown timer
+    const tick = setInterval(() => {
+      const diff = endRef.current - Date.now()
+      if (diff <= 0) { setCountdown('Closed'); return }
+      const h = Math.floor(diff / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
+      setUrgent(diff < 2 * 3600 * 1000)
+    }, 1000)
 
-  setLeaderboard(sorted)
-  setTotalRegistered(totalReg)
-  setTotalVoted(totalVotes)
-  setTurnoutPct(totalPct)
-
-  // Animate bars after data loads
-  setTimeout(() => {
-    setBarWidths(sorted.map(() => totalPct))
-    // Update turnout ring
-    const circumference = 163.36
-    const offset = circumference - (totalPct / 100) * circumference
-    setTurnoutOffset(offset)
-  }, 400)
-}
-
-const params = new URLSearchParams(window.location.search)
-  if (params.get('voted') === 'true') launchConfetti()
-
-  setTimeout(() => {
-    setBarWidths([82, 74, 68, 55, 41])
-    setTurnoutOffset(53.91)
-  }, 400)
-}
-
- loadUser()
-
-  // Countdown timer
-  const tick = setInterval(() => {
-    const diff = endRef.current - Date.now()
-    if (diff <= 0) { setCountdown('Closed'); return }
-    const h = Math.floor(diff / 3600000)
-    const m = Math.floor((diff % 3600000) / 60000)
-    const s = Math.floor((diff % 60000) / 1000)
-    setCountdown(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`)
-    setUrgent(diff < 2 * 3600 * 1000)
-  }, 1000)
-
-  const handleClick = (e: MouseEvent) => {
-    if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-      setShowNotif(false)
+    const handleClick = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotif(false)
+      }
     }
-  }
-  document.addEventListener('click', handleClick)
-  return () => { clearInterval(tick); document.removeEventListener('click', handleClick) }
-}, [])
- const doLogout = async () => {
+    document.addEventListener('click', handleClick)
+    return () => { clearInterval(tick); document.removeEventListener('click', handleClick) }
+  }, [])
+
+  const doLogout = async () => {
     await signOut()
     navigateTo('/home')
- }
+  }
 
   const launchConfetti = () => {
     const colors = ['#C9A227', '#1B2A5E', '#fff', '#22C55E', '#f0d060']
     for (let i = 0; i < 60; i++) {
       setTimeout(() => {
         const el = document.createElement('div')
-        el.style.cssText = `position:fixed;width:8px;height:8px;border-radius:2px;z-index:999;pointer-events:none;left:${Math.random()*100}vw;top:-20px;background:${colors[Math.floor(Math.random()*colors.length)]};animation:dashConfettiFall ${1.5+Math.random()*2}s linear forwards;`
+        el.style.cssText = `position:fixed;width:8px;height:8px;border-radius:2px;z-index:999;pointer-events:none;left:${Math.random() * 100}vw;top:-20px;background:${colors[Math.floor(Math.random() * colors.length)]};animation:dashConfettiFall ${1.5 + Math.random() * 2}s linear forwards;`
         document.body.appendChild(el)
         setTimeout(() => el.remove(), 4000)
       }, i * 40)
@@ -196,20 +189,18 @@ const params = new URLSearchParams(window.location.search)
 
   if (!user) return null
 
- // const navName = user.name.split(' ').slice(0, 2).join(' ')
-  //const faculty = user.faculty?.replace('Faculty of ', '') || 'Information Technology'
-
-const navName = user.name.split(' ').slice(0, 2).join(' ')
-const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technology'
+  const navName = user.name.split(' ').slice(0, 2).join(' ')
+  const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technology'
 
   const NOTIFS = [
-    { icon: <Send size={13} color="#C9A227" />, text: <><strong>Voting is now open!</strong> Cast your vote before 5:00 PM today.</>, time: '2 hours ago' },
-    { icon: <Award size={13} color="#C9A227" />, text: <><strong>Faculty of IT</strong> is leading the leaderboard at 82% turnout!</>, time: '1 hour ago' },
-    { icon: <BarChart2 size={13} color="#C9A227" />, text: <>Results will be announced <strong>live at 6:00 PM</strong> at the Main Hall.</>, time: '30 minutes ago' },
+    { icon: <Send size={13} color="#C9A227" />, text: <><strong>Voting is now open!</strong> Cast your vote before the deadline.</>, time: 'Today' },
+    { icon: <Award size={13} color="#C9A227" />, text: <><strong>Faculty Leaderboard</strong> is live. Check your faculty ranking below.</>, time: 'Today' },
+    { icon: <BarChart2 size={13} color="#C9A227" />, text: <>Results will be announced after polls close.</>, time: 'Today' },
   ]
 
   return (
     <>
+      {/* Mobile overlay and menu */}
       <div className={`dash-mobile-overlay ${menuOpen ? 'open' : ''}`} onClick={() => setMenuOpen(false)} />
       <div className={`dash-mobile-menu ${menuOpen ? 'open' : ''}`}>
         <button className="dash-menu-close" onClick={() => setMenuOpen(false)}><X size={18} /></button>
@@ -247,7 +238,7 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
           {/* TOP NAV */}
           <nav className="dash-topnav">
             <div className="dash-nav-left">
-              <img src="/gctu-crest.png" alt="GCTU" className="dash-nav-crest"  loading="eager" />
+              <img src="/gctu-crest.png" alt="GCTU" className="dash-nav-crest" loading="eager" />
               <div className="dash-nav-title">GT<span>-Vote</span></div>
             </div>
             <div className="dash-nav-right">
@@ -263,8 +254,8 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
             </button>
           </nav>
 
-          {/* NOTIF DROPDOWN — outside nav to avoid filter stacking context */}
-          <div className={`dash-notif-dd ${showNotif ? 'open' : ''}`} style={{position:'fixed', top:'60px', right:'1.5rem'}}>
+          {/* NOTIF DROPDOWN */}
+          <div className={`dash-notif-dd ${showNotif ? 'open' : ''}`} style={{ position: 'fixed', top: '60px', right: '1.5rem' }}>
             <div className="dash-notif-header">
               Notifications
               <span className="dash-notif-clear" onClick={() => { setNotifRead(true); setShowNotif(false) }}>Mark all read</span>
@@ -285,7 +276,12 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
             <div className="dash-announcement">
               <div className="dash-announcement-text">
                 <Send size={16} color="#C9A227" style={{ flexShrink: 0 }} />
-                <span><strong>Reminder:</strong> Voting closes today at <strong>5:00 PM</strong>. Results announced live at <strong>6:00 PM</strong> — Main Hall.</span>
+                <span>
+                  {announcement
+                    ? announcement
+                    : <><strong>Reminder:</strong> Voting closes today at <strong>5:00 PM</strong>. Results announced live at <strong>6:00 PM</strong> — Main Hall.</>
+                  }
+                </span>
               </div>
               <button className="dash-dismiss-btn" onClick={() => setShowAnnouncement(false)}>
                 <X size={12} />
@@ -311,25 +307,29 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
               </div>
             </div>
 
-            {/* Stats */}
-           <div className="dash-stat-card">
-              <div className="dash-stat-val">
-                {totalRegistered > 0 ? totalRegistered.toLocaleString() : '—'}
+            {/* Stats row — three separate cards */}
+            <div className="dash-stats-row">
+              <div className="dash-stat-card">
+                <div className="dash-stat-val">
+                  {totalRegistered > 0 ? totalRegistered.toLocaleString() : '—'}
+                </div>
+                <div className="dash-stat-lbl">Registered</div>
               </div>
-              <div className="dash-stat-lbl">Registered</div>
-            <div className="dash-stat-card">
-              <svg width="64" height="64" viewBox="0 0 64 64">
-                <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
-                <circle cx="32" cy="32" r="26" fill="none" stroke="#C9A227" strokeWidth="5"
-                  strokeDasharray="163.36" strokeDashoffset={turnoutOffset}
-                  strokeLinecap="round" transform="rotate(-90 32 32)"
-                  style={{ transition: 'stroke-dashoffset 1.4s ease' }} />
-                <text x="32" y="36" textAnchor="middle" fill="#C9A227" fontSize="12" fontWeight="900" fontFamily="Inter">
-                  {turnoutPct}%
-                </text>
-              </svg>
-              <div className="dash-stat-lbl">Turnout</div>
-            </div>
+
+              <div className="dash-stat-card">
+                <svg width="64" height="64" viewBox="0 0 64 64">
+                  <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
+                  <circle cx="32" cy="32" r="26" fill="none" stroke="#C9A227" strokeWidth="5"
+                    strokeDasharray="163.36" strokeDashoffset={turnoutOffset}
+                    strokeLinecap="round" transform="rotate(-90 32 32)"
+                    style={{ transition: 'stroke-dashoffset 1.4s ease' }} />
+                  <text x="32" y="36" textAnchor="middle" fill="#C9A227" fontSize="12" fontWeight="900" fontFamily="Inter">
+                    {turnoutPct}%
+                  </text>
+                </svg>
+                <div className="dash-stat-lbl">Turnout</div>
+              </div>
+
               <div className="dash-stat-card">
                 <div className={`dash-stat-val ${urgent ? 'urgent' : ''}`}>{countdown}</div>
                 <div className="dash-stat-lbl">Time Left</div>
@@ -340,7 +340,7 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
             <div className="dash-vote-wrap">
               {user.voted ? (
                 <>
-                  <button className="dash-voted-btn"><CheckSquare size={16}  />Already Voted</button>
+                  <button className="dash-voted-btn"><CheckSquare size={16} />Already Voted</button>
                   {user.receiptCode && (
                     <div className="dash-receipt">
                       <div className="dash-receipt-label">Your Receipt Code</div>
@@ -350,7 +350,7 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
                 </>
               ) : (
                 <button className="dash-vote-btn" onClick={() => setShowPopup(true)}>
-                  <CheckSquare size={16}  />Cast Your Vote
+                  <CheckSquare size={16} />Cast Your Vote
                 </button>
               )}
             </div>
@@ -358,14 +358,17 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
             {/* Meet the Candidates */}
             <div className="dash-ghost-wrap">
               <button className="dash-ghost-btn" onClick={() => navigateTo('/candidates')}>
-                <Users size={16}  />Meet the Candidates
+                <Users size={16} />Meet the Candidates
               </button>
             </div>
 
             {/* Verify My Vote */}
             <div className="dash-ghost-wrap">
-              <button className={`dash-ghost-btn ${!user.voted ? 'disabled' : ''}`} onClick={() => { if (user.voted) navigateTo('/verify') }}>
-                <Search size={16}  />Verify My Vote
+              <button
+                className={`dash-ghost-btn ${!user.voted ? 'disabled' : ''}`}
+                onClick={() => { if (user.voted) navigateTo('/verify') }}
+              >
+                <Search size={16} />Verify My Vote
               </button>
               <div className={`dash-verify-hint ${user.voted ? 'active' : ''}`}>
                 {user.voted ? 'Check that your ballot was counted' : 'Vote first to verify your ballot'}
@@ -376,11 +379,11 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
             <div className="dash-lb-wrap">
               <div className="dash-section-title">Faculty Leaderboard</div>
               <div className="dash-lb-card">
-               {leaderboard.length === 0 ? (
-  <div style={{ textAlign: 'center', padding: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
-    Loading leaderboard...
-  </div>
-) : (
+                {leaderboard.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+                    Loading leaderboard...
+                  </div>
+                ) : (
                   leaderboard.map((f, i) => (
                     <div key={f.name} className={`dash-lb-row ${f.rank === 1 ? 'top' : ''}`}>
                       <div>
@@ -397,7 +400,7 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
                         <div className="dash-lb-bar-bg">
                           <div
                             className={`dash-lb-bar ${f.rank === 1 ? 'gold' : 'normal'}`}
-                            style={{ width: `${barWidths[i] ?? 0}%` }}
+                            style={{ width: `${barWidths[i] ?? 0}%`, transition: 'width 1.4s ease' }}
                           />
                         </div>
                       </div>
@@ -410,17 +413,16 @@ const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technol
 
           </div>
         </div>
-
       </PageBackground>
 
-      {/* VOTE POPUP — outside PageBackground so position:fixed works correctly */}
+      {/* VOTE POPUP */}
       <div className={`dash-popup-overlay ${showPopup ? 'show' : ''}`} onClick={(e: React.MouseEvent) => { if (e.target === e.currentTarget) setShowPopup(false) }}>
         <div className="dash-popup">
           <div className="dash-popup-icon"><ClipboardCheck size={48} color="#fff" /></div>
           <div className="dash-popup-title">Ready to Vote?</div>
           <div className="dash-popup-sub">
-            You&apos;re about to cast your vote as<br/>
-            <strong>{user.name}</strong><br/>
+            You&apos;re about to cast your vote as<br />
+            <strong>{user.name}</strong><br />
             This action <strong>cannot be undone</strong>.
           </div>
           <div className="dash-popup-actions">
