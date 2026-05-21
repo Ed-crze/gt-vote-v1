@@ -79,6 +79,10 @@ useEffect(() => {
   if (settings.announcement) setAnnText(settings.announcement)
   if (settings.end_time) {
     endRef.current = new Date(settings.end_time).getTime()
+    if (new Date(settings.end_time).getTime() < Date.now()) {
+    setVotingOpen(false)
+    setCountdown('Closed')
+  }
   }
 }
 
@@ -146,9 +150,19 @@ if (facultyData && registryData) {
   loadDashboard()
 
   // Countdown timer
- const interval = setInterval(() => {
+const interval = setInterval(() => {
   const diff = endRef.current - Date.now()
-  if (diff <= 0) { setCountdown('Closed'); return }
+  if (diff <= 0) {
+    setCountdown('Closed')
+    setVotingOpen(false)
+    // Auto-close in database if still open
+    supabase
+      .from('election_settings')
+      .update({ is_open: false })
+      .eq('id', 1)
+      .then(() => { })
+    return
+  }
   const h = Math.floor(diff / 3600000)
   const m = Math.floor((diff % 3600000) / 60000)
   const s = Math.floor((diff % 60000) / 1000)
@@ -329,15 +343,15 @@ async function handleVotingToggle() {
             <TrendingUp size={14} color="#C9A227" className="verify-icon-inline" /> Faculty Turnout
           </div>
           <div className="admin-fac-card fade-up-3">
-           {(facultyTurnout.length > 0 ? facultyTurnout : FACULTY_DATA).map(f => (
-  <div key={f.name} className="admin-fac-row">
-    <div className="admin-fac-name">{f.name}</div>
-    <div className="admin-fac-bar-bg">
-      <div className="admin-fac-bar" style={{ width: barsReady ? `${f.pct}%` : '0%' }} />
-    </div>
-    <div className="admin-fac-pct">{f.pct}%</div>
-  </div>
-))}
+            {(facultyTurnout.length > 0 ? facultyTurnout : FACULTY_DATA).map(f => (
+              <div key={f.name} className="admin-fac-row">
+                <div className="admin-fac-name">{f.name}</div>
+                <div className="admin-fac-bar-bg">
+                  <div className="admin-fac-bar" style={{ width: barsReady ? `${f.pct}%` : '0%' }} />
+                </div>
+                <div className="admin-fac-pct">{f.pct}%</div>
+              </div>
+            ))}
           </div>
 
         </div>

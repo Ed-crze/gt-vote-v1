@@ -101,9 +101,14 @@ const [votingOpen, setVotingOpen] = useState(true)
       setVotingOpen(settings.is_open ?? false)
 
       // Set countdown end time from database
-      if (settings.end_time) {
-        endRef.current = new Date(settings.end_time).getTime()
-      }
+     if (settings.end_time) {
+  endRef.current = new Date(settings.end_time).getTime()
+  // If end time has already passed, immediately mark as closed
+  if (new Date(settings.end_time).getTime() < Date.now()) {
+    setVotingOpen(false)
+    setCountdown('Closed')
+  }
+}
     }
 
     // ── Load real turnout data ──────────────────────────────
@@ -157,19 +162,20 @@ const [votingOpen, setVotingOpen] = useState(true)
   loadUser()
 
   // Countdown timer — reads from endRef which is now set from database
-  const tick = setInterval(() => {
-    const diff = endRef.current - Date.now()
-    if (diff <= 0) {
-      setCountdown('Closed')
-      setUrgent(false)
-      return
-    }
-    const h = Math.floor(diff / 3600000)
-    const m = Math.floor((diff % 3600000) / 60000)
-    const s = Math.floor((diff % 60000) / 1000)
-    setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
-    setUrgent(diff < 2 * 3600 * 1000)
-  }, 1000)
+ const tick = setInterval(() => {
+  const diff = endRef.current - Date.now()
+  if (diff <= 0) {
+    setCountdown('Closed')
+    setUrgent(false)
+    setVotingOpen(false) // ← add this line
+    return
+  }
+  const h = Math.floor(diff / 3600000)
+  const m = Math.floor((diff % 3600000) / 60000)
+  const s = Math.floor((diff % 60000) / 1000)
+  setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
+  setUrgent(diff < 2 * 3600 * 1000)
+}, 1000)
 
   const handleClick = (e: MouseEvent) => {
     if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
