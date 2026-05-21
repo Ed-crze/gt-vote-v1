@@ -39,136 +39,146 @@ export default function DashboardPage() {
   const [turnoutOffset, setTurnoutOffset] = useState(163.36)
   const endRef = useRef(Date.now() + 14 * 3600 * 1000)
   const notifRef = useRef<HTMLDivElement>(null)
+const [votingOpen, setVotingOpen] = useState(true)
 
   useEffect(() => {
-    const supabase = createClient()
+  const supabase = createClient()
 
-    async function loadUser() {
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (!authUser) { navigateTo('/login'); return }
+  async function loadUser() {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) { navigateTo('/login'); return }
 
-      const { data: profile } = await supabase
-        .from('students')
-        .select('full_name, faculty, student_id')
-        .eq('id', authUser.id)
-        .single()
+    const { data: profile } = await supabase
+      .from('students')
+      .select('full_name, faculty, student_id')
+      .eq('id', authUser.id)
+      .single()
 
-      if (!profile) {
-        const { signOut } = await import('@/lib/auth-client')
-        await signOut()
-        navigateTo('/login')
-        return
-      }
+    if (!profile) {
+      const { signOut } = await import('@/lib/auth-client')
+      await signOut()
+      navigateTo('/login')
+      return
+    }
 
-      const { hashStudentId } = await import('@/lib/auth-client')
-      const hash = await hashStudentId(profile.student_id)
+    const { hashStudentId } = await import('@/lib/auth-client')
+    const hash = await hashStudentId(profile.student_id)
 
-      const { data: registry } = await supabase
-        .from('voter_registry')
-        .select('has_voted')
-        .eq('student_id_hash', hash)
-        .single()
+    const { data: registry } = await supabase
+      .from('voter_registry')
+      .select('has_voted')
+      .eq('student_id_hash', hash)
+      .single()
 
-      const hasVoted = registry?.has_voted ?? false
-      let receiptCode = null
+    const hasVoted = registry?.has_voted ?? false
+    let receiptCode = null
 
-      if (hasVoted) {
-        const { data: ballot } = await supabase.rpc('get_receipt_for_session')
-        receiptCode = ballot ?? null
-      }
+    if (hasVoted) {
+      const { data: ballot } = await supabase.rpc('get_receipt_for_session')
+      receiptCode = ballot ?? null
+    }
 
-      setUser({
-        id: authUser.id,
-        name: profile.full_name,
-        faculty: profile.faculty,
-        voted: hasVoted,
-        receiptCode,
-      })
+    setUser({
+      id: authUser.id,
+      name: profile.full_name,
+      faculty: profile.faculty,
+      voted: hasVoted,
+      receiptCode,
+    })
 
-      // Load election settings announcement
-      const { data: settings } = await supabase
-        .from('election_settings')
-        .select('announcement, end_time')
-        .eq('id', 1)
-        .single()
+    // ── Load election settings ──────────────────────────────
+    const { data: settings } = await supabase
+      .from('election_settings')
+      .select('is_open, announcement, start_time, end_time')
+      .eq('id', 1)
+      .single()
 
-      if (settings?.announcement) setAnnouncement(settings.announcement)
-      if (settings?.end_time) {
+    if (settings) {
+      // Set announcement
+      if (settings.announcement) setAnnouncement(settings.announcement)
+
+      // Set voting open/closed state
+      setVotingOpen(settings.is_open ?? false)
+
+      // Set countdown end time from database
+      if (settings.end_time) {
         endRef.current = new Date(settings.end_time).getTime()
       }
-
-      // Load real turnout data
-      const { data: facultyData } = await supabase
-        .from('students')
-        .select('faculty')
-
-      const { data: registryData } = await supabase
-        .from('voter_registry')
-        .select('has_voted')
-
-      if (facultyData && registryData) {
-        const totalReg = facultyData.length
-        const rawVotes = registryData.filter(r => r.has_voted).length
-        // Cap votes at registered count to prevent over 100%
-        const totalVotes = Math.min(rawVotes, totalReg)
-        const pct = totalReg > 0
-          ? Math.min(Math.round((totalVotes / totalReg) * 100), 100)
-          : 0
-
-        // Count students per faculty
-        const facultyCounts: Record<string, number> = {}
-        facultyData.forEach(s => {
-          if (s.faculty) {
-            facultyCounts[s.faculty] = (facultyCounts[s.faculty] || 0) + 1
-          }
-        })
-
-        const sorted = Object.entries(facultyCounts)
-          .sort((a, b) => b[1] - a[1])
-          .map(([name, count], i) => ({
-            name: name.replace('Faculty of ', ''),
-            pct,
-            total: count,
-            rank: i + 1,
-          }))
-
-        setLeaderboard(sorted)
-        setTotalRegistered(totalReg)
-        setTurnoutPct(pct)
-
-        // Animate after data loads
-        setTimeout(() => {
-          setBarWidths(sorted.map(() => pct))
-          const circumference = 163.36
-          setTurnoutOffset(circumference - (pct / 100) * circumference)
-        }, 400)
-      }
-
-      const params = new URLSearchParams(window.location.search)
-      if (params.get('voted') === 'true') launchConfetti()
     }
 
-    loadUser()
+    // ── Load real turnout data ──────────────────────────────
+    const { data: facultyData } = await supabase
+      .from('students')
+      .select('faculty')
 
-    // Countdown timer
-    const tick = setInterval(() => {
-      const diff = endRef.current - Date.now()
-      if (diff <= 0) { setCountdown('Closed'); return }
-      const h = Math.floor(diff / 3600000)
-      const m = Math.floor((diff % 3600000) / 60000)
-      const s = Math.floor((diff % 60000) / 1000)
-      setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
-      setUrgent(diff < 2 * 3600 * 1000)
-    }, 1000)
+    const { data: registryData } = await supabase
+      .from('voter_registry')
+      .select('has_voted')
 
-    const handleClick = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setShowNotif(false)
-      }
+    if (facultyData && registryData) {
+      const totalReg = facultyData.length
+      const rawVotes = registryData.filter(r => r.has_voted).length
+      const totalVotes = Math.min(rawVotes, totalReg)
+      const pct = totalReg > 0
+        ? Math.min(Math.round((totalVotes / totalReg) * 100), 100)
+        : 0
+
+      const facultyCounts: Record<string, number> = {}
+      facultyData.forEach(s => {
+        if (s.faculty) {
+          facultyCounts[s.faculty] = (facultyCounts[s.faculty] || 0) + 1
+        }
+      })
+
+      const sorted = Object.entries(facultyCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count], i) => ({
+          name: name.replace('Faculty of ', ''),
+          pct,
+          total: count,
+          rank: i + 1,
+        }))
+
+      setLeaderboard(sorted)
+      setTotalRegistered(totalReg)
+      setTurnoutPct(pct)
+
+      setTimeout(() => {
+        setBarWidths(sorted.map(() => pct))
+        const circumference = 163.36
+        setTurnoutOffset(circumference - (pct / 100) * circumference)
+      }, 400)
     }
-    document.addEventListener('click', handleClick)
-    return () => { clearInterval(tick); document.removeEventListener('click', handleClick) }
-  }, [])
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('voted') === 'true') launchConfetti()
+  }
+
+  loadUser()
+
+  // Countdown timer — reads from endRef which is now set from database
+  const tick = setInterval(() => {
+    const diff = endRef.current - Date.now()
+    if (diff <= 0) {
+      setCountdown('Closed')
+      setUrgent(false)
+      return
+    }
+    const h = Math.floor(diff / 3600000)
+    const m = Math.floor((diff % 3600000) / 60000)
+    const s = Math.floor((diff % 60000) / 1000)
+    setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
+    setUrgent(diff < 2 * 3600 * 1000)
+  }, 1000)
+
+  const handleClick = (e: MouseEvent) => {
+    if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+      setShowNotif(false)
+    }
+  }
+  document.addEventListener('click', handleClick)
+  return () => { clearInterval(tick); document.removeEventListener('click', handleClick) }
+}, [])
 
   const doLogout = async () => {
     await signOut()
@@ -340,7 +350,9 @@ export default function DashboardPage() {
             <div className="dash-vote-wrap">
               {user.voted ? (
                 <>
-                  <button className="dash-voted-btn"><CheckSquare size={16} />Already Voted</button>
+                  <button className="dash-voted-btn">
+                    <CheckSquare size={16} />Already Voted
+                  </button>
                   {user.receiptCode && (
                     <div className="dash-receipt">
                       <div className="dash-receipt-label">Your Receipt Code</div>
@@ -348,12 +360,17 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </>
+              ) : !votingOpen ? (
+                <button className="dash-voted-btn" style={{ background: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.3)', color: '#EF4444', cursor: 'not-allowed' }}>
+                  <X size={16} />Voting is Closed
+                </button>
               ) : (
                 <button className="dash-vote-btn" onClick={() => setShowPopup(true)}>
                   <CheckSquare size={16} />Cast Your Vote
                 </button>
               )}
             </div>
+          
 
             {/* Meet the Candidates */}
             <div className="dash-ghost-wrap">
