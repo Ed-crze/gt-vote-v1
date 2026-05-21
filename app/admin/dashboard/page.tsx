@@ -35,6 +35,8 @@ const [votesCast, setVotesCast] = useState(0)
 const [turnout, setTurnout] = useState(0)
 const [resultsData, setResultsData] = useState<typeof RESULTS_DATA>([])
 const [votingOpen, setVotingOpen] = useState(false)
+const endRef = useRef(Date.now() + 5 * 3600 * 1000)
+const [facultyTurnout, setFacultyTurnout] = useState<{ name: string; pct: number }[]>([])
 
 
 useEffect(() => {
@@ -68,14 +70,54 @@ useEffect(() => {
     // Get election settings
     const { data: settings } = await supabase
       .from('election_settings')
-      .select('is_open, announcement')
+      .select('is_open, announcement,end_time')
       .eq('id', 1)
       .single()
 
-    if (settings) {
-      setVotingOpen(settings.is_open)
-      if (settings.announcement) setAnnText(settings.announcement)
+   if (settings) {
+  setVotingOpen(settings.is_open)
+  if (settings.announcement) setAnnText(settings.announcement)
+  if (settings.end_time) {
+    endRef.current = new Date(settings.end_time).getTime()
+  }
+}
+
+// Real faculty turnout
+const { data: facultyData } = await supabase
+  .from('students')
+  .select('faculty')
+
+const { data: registryData } = await supabase
+  .from('voter_registry')
+  .select('has_voted')
+
+if (facultyData && registryData) {
+  const totalReg = facultyData.length
+  const totalVotes = Math.min(
+    registryData.filter(r => r.has_voted).length,
+    totalReg
+  )
+  const overallPct = totalReg > 0
+    ? Math.min(Math.round((totalVotes / totalReg) * 100), 100)
+    : 0
+
+  const facultyCounts: Record<string, number> = {}
+  facultyData.forEach(s => {
+    if (s.faculty) {
+      facultyCounts[s.faculty] = (facultyCounts[s.faculty] || 0) + 1
     }
+  })
+
+  const sorted = Object.entries(facultyCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({
+      name: name.replace('Faculty of ', ''),
+      pct: overallPct,
+    }))
+
+  setFacultyTurnout(sorted)
+}
+
 
     // Get live results per position
     const { data: ballots } = await supabase
@@ -104,15 +146,14 @@ useEffect(() => {
   loadDashboard()
 
   // Countdown timer
-  const interval = setInterval(() => {
-    const end = new Date(); end.setHours(17, 0, 0, 0)
-    const diff = end.getTime() - Date.now()
-    if (diff <= 0) { setCountdown('Closed'); return }
-    const h = Math.floor(diff / 3600000)
-    const m = Math.floor((diff % 3600000) / 60000)
-    const s = Math.floor((diff % 60000) / 1000)
-    setCountdown(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`)
-  }, 1000)
+ const interval = setInterval(() => {
+  const diff = endRef.current - Date.now()
+  if (diff <= 0) { setCountdown('Closed'); return }
+  const h = Math.floor(diff / 3600000)
+  const m = Math.floor((diff % 3600000) / 60000)
+  const s = Math.floor((diff % 60000) / 1000)
+  setCountdown(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`)
+}, 1000)
 
   return () => clearInterval(interval)
 }, [])
@@ -288,15 +329,15 @@ async function handleVotingToggle() {
             <TrendingUp size={14} color="#C9A227" className="verify-icon-inline" /> Faculty Turnout
           </div>
           <div className="admin-fac-card fade-up-3">
-            {FACULTY_DATA.map(f => (
-              <div key={f.name} className="admin-fac-row">
-                <div className="admin-fac-name">{f.name}</div>
-                <div className="admin-fac-bar-bg">
-                  <div className="admin-fac-bar" style={{ width: barsReady ? `${f.pct}%` : '0%' }} />
-                </div>
-                <div className="admin-fac-pct">{f.pct}%</div>
-              </div>
-            ))}
+           {(facultyTurnout.length > 0 ? facultyTurnout : FACULTY_DATA).map(f => (
+  <div key={f.name} className="admin-fac-row">
+    <div className="admin-fac-name">{f.name}</div>
+    <div className="admin-fac-bar-bg">
+      <div className="admin-fac-bar" style={{ width: barsReady ? `${f.pct}%` : '0%' }} />
+    </div>
+    <div className="admin-fac-pct">{f.pct}%</div>
+  </div>
+))}
           </div>
 
         </div>
