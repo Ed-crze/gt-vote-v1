@@ -93,23 +93,19 @@ const [votingOpen, setVotingOpen] = useState(true)
       .eq('id', 1)
       .single()
 
-    if (settings) {
-      // Set announcement
-      if (settings.announcement) setAnnouncement(settings.announcement)
+   if (settings) {
+  if (settings.announcement) setAnnouncement(settings.announcement)
 
-      // Set voting open/closed state
-      setVotingOpen(settings.is_open ?? false)
-
-      // Set countdown end time from database
-     if (settings.end_time) {
-  endRef.current = new Date(settings.end_time).getTime()
-  // If end time has already passed, immediately mark as closed
-  if (new Date(settings.end_time).getTime() < Date.now()) {
-    setVotingOpen(false)
-    setCountdown('Closed')
+  if (settings.end_time) {
+    endRef.current = new Date(settings.end_time).getTime()
+    const timeExpired = new Date(settings.end_time).getTime() < Date.now()
+    // Open only if admin enabled it AND time hasn't expired
+    setVotingOpen((settings.is_open ?? false) && !timeExpired)
+    if (timeExpired) setCountdown('Closed')
+  } else {
+    setVotingOpen(settings.is_open ?? false)
   }
 }
-    }
 
     // ── Load real turnout data ──────────────────────────────
     const { data: facultyData } = await supabase

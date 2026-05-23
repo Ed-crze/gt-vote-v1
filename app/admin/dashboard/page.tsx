@@ -74,17 +74,20 @@ useEffect(() => {
       .eq('id', 1)
       .single()
 
-   if (settings) {
-  setVotingOpen(settings.is_open)
-  if (settings.announcement) setAnnText(settings.announcement)
-  if (settings.end_time) {
-    endRef.current = new Date(settings.end_time).getTime()
-    if (new Date(settings.end_time).getTime() < Date.now()) {
-    setVotingOpen(false)
-    setCountdown('Closed')
-  }
-  }
-}
+    if (settings) {
+      if (settings.announcement) setAnnText(settings.announcement)
+
+      if (settings.end_time) {
+        endRef.current = new Date(settings.end_time).getTime()
+        const timeExpired = new Date(settings.end_time).getTime() < Date.now()
+        // Voting open only if admin set it open AND time hasn't expired
+        setVotingOpen(settings.is_open && !timeExpired)
+        if (timeExpired) setCountdown('Closed')
+      } else {
+        // No end time set — just use is_open
+        setVotingOpen(settings.is_open)
+      }
+    }
 
 // Real faculty turnout
 const { data: facultyData } = await supabase
@@ -156,11 +159,6 @@ const interval = setInterval(() => {
     setCountdown('Closed')
     setVotingOpen(false)
     // Auto-close in database if still open
-    supabase
-      .from('election_settings')
-      .update({ is_open: false })
-      .eq('id', 1)
-      .then(() => { })
     return
   }
   const h = Math.floor(diff / 3600000)

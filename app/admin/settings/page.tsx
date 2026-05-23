@@ -62,16 +62,16 @@ async function saveSettings() {
   const supabase = createClient()
 
   const startISO = startDate && startTime
-  ? new Date(`${startDate}T${startTime}:00`).toISOString()
-  : null
-const endISO = endDate && endTime
-  ? new Date(`${endDate}T${endTime}:00`).toISOString()
-  : null
+    ? new Date(`${startDate}T${startTime}:00`).toISOString()
+    : null
+  const endISO = endDate && endTime
+    ? new Date(`${endDate}T${endTime}:00`).toISOString()
+    : null
 
   const { error } = await supabase
     .from('election_settings')
     .update({
-      is_open: allowVoting,
+      is_open: allowVoting,   // controlled by the toggle in settings
       announcement: announcement.trim(),
       start_time: startISO,
       end_time: endISO,
