@@ -57,7 +57,7 @@ const [pendingProfile, setPendingProfile] = useState<{ name: string; faculty: st
   }
 
   function startCountdown() {
-  setCountdown(60)
+  setCountdown(30)
   setCanResend(false)
   const t = setInterval(() => {
     setCountdown(c => {
