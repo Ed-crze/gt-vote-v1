@@ -5,6 +5,7 @@ import { useNavigate } from '@/lib/hooks'
 import { createClient } from '@/lib/supabase/client'
 import { signOut } from '@/lib/auth-client'
 import PageBackground from '@/components/PageBackground'
+import { startInactivityTimer } from '@/lib/inactivity'
 
 export default function DashboardPage() {
   const { navigateTo, fadingOut } = useNavigate()
@@ -156,6 +157,28 @@ const [votingOpen, setVotingOpen] = useState(true)
   }
 
   loadUser()
+// ── 1. Keepalive — refresh JWT every 4 minutes while tab is open ──
+const sessionRefresh = setInterval(async () => {
+  const supabase = createClient()
+  await supabase.auth.refreshSession()
+}, 4 * 60 * 1000)
+
+// ── 2. Inactivity — log out after 30 minutes of no interaction ──
+const stopInactivity = startInactivityTimer({
+  timeoutMs: 30 * 60 * 1000,
+  onTimeout: async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut({ scope: 'global' })
+    navigateTo('/login?reason=inactivity')
+  }
+})
+
+// ── 3. Tab close — log out when browser tab or window is closed ──
+const handleUnload = async () => {
+  const supabase = createClient()
+  await supabase.auth.signOut({ scope: 'global' })
+}
+window.addEventListener('beforeunload', handleUnload)
 
   // Countdown timer — reads from endRef which is now set from database
  const tick = setInterval(() => {
@@ -179,7 +202,13 @@ const [votingOpen, setVotingOpen] = useState(true)
     }
   }
   document.addEventListener('click', handleClick)
-  return () => { clearInterval(tick); document.removeEventListener('click', handleClick) }
+    return () => {
+      clearInterval(tick)
+      clearInterval(sessionRefresh)
+      stopInactivity()
+      window.removeEventListener('beforeunload', handleUnload)
+      document.removeEventListener('click', handleClick)
+    }
 }, [])
 
   const doLogout = async () => {

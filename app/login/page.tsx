@@ -50,6 +50,12 @@ const [pendingProfile, setPendingProfile] = useState<{ name: string; faculty: st
   if (err === 'invalid-reset-link') {
     setError('Your password reset link is invalid or has expired. Please try again.')
   }
+
+   const reason = searchParams.get('reason')
+   if (reason === 'inactivity') {
+     setError('You were logged out due to 30 minutes of inactivity.')
+   }
+
 }, [searchParams])
   const triggerShake = () => {
     setShake(true)

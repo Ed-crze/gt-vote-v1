@@ -5,6 +5,7 @@ import AdminNav from '@/components/AdminNav'
 import { createClient } from '@/lib/supabase/client'
 import { POSITIONS } from '@/lib/data'
 import { useNavigate } from '@/lib/hooks'
+import { startInactivityTimer } from '@/lib/inactivity'
 
 const FACULTY_DATA = [
   { name: 'Faculty of IT', pct: 82 },
@@ -151,6 +152,28 @@ if (facultyData && registryData) {
   }
 
   loadDashboard()
+// ── 1. Keepalive ──
+const sessionRefresh = setInterval(async () => {
+  const supabase = createClient()
+  await supabase.auth.refreshSession()
+}, 4 * 60 * 1000)
+
+// ── 2. Inactivity logout ──
+const stopInactivity = startInactivityTimer({
+  timeoutMs: 30 * 60 * 1000,
+  onTimeout: async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut({ scope: 'global' })
+    navigateTo('/admin?reason=inactivity')
+  }
+})
+
+// ── 3. Tab close logout ──
+const handleUnload = async () => {
+  const supabase = createClient()
+  await supabase.auth.signOut({ scope: 'global' })
+}
+window.addEventListener('beforeunload', handleUnload)
 
   // Countdown timer
 const interval = setInterval(() => {
@@ -167,7 +190,12 @@ const interval = setInterval(() => {
   setCountdown(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`)
 }, 1000)
 
-  return () => clearInterval(interval)
+return () => {
+  clearInterval(interval)
+  clearInterval(sessionRefresh)
+  stopInactivity()
+  window.removeEventListener('beforeunload', handleUnload)
+}
 }, [])
 
 
