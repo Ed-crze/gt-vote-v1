@@ -151,17 +151,6 @@ if (facultyData && registryData) {
   }
 
   loadDashboard()
-// ── 1. Keepalive ──
-const sessionRefresh = setInterval(async () => {
-  const supabase = createClient()
-  await supabase.auth.refreshSession()
-}, 4 * 60 * 1000)
-
-// ── 2. Inactivity logout ──
-
-
-// ── 3. Tab close logout ──
-
 
   // Countdown timer
 const interval = setInterval(() => {
@@ -180,7 +169,6 @@ const interval = setInterval(() => {
 
 return () => {
   clearInterval(interval)
-  clearInterval(sessionRefresh)
 }
 }, [])
 

@@ -156,16 +156,6 @@ const [votingOpen, setVotingOpen] = useState(true)
   }
 
   loadUser()
-// ── 1. Keepalive — refresh JWT every 4 minutes while tab is open ──
-const sessionRefresh = setInterval(async () => {
-  const supabase = createClient()
-  await supabase.auth.refreshSession()
-}, 4 * 60 * 1000)
-
-
-// ── 3. Tab close — log out when browser tab or window is closed ──
-
-
   // Countdown timer — reads from endRef which is now set from database
  const tick = setInterval(() => {
   const diff = endRef.current - Date.now()
@@ -190,7 +180,6 @@ const sessionRefresh = setInterval(async () => {
   document.addEventListener('click', handleClick)
     return () => {
       clearInterval(tick)
-      clearInterval(sessionRefresh)
       document.removeEventListener('click', handleClick)
     }
 }, [])
