@@ -174,11 +174,7 @@ const stopInactivity = startInactivityTimer({
 })
 
 // ── 3. Tab close — log out when browser tab or window is closed ──
-const handleUnload = async () => {
-  const supabase = createClient()
-  await supabase.auth.signOut({ scope: 'global' })
-}
-window.addEventListener('beforeunload', handleUnload)
+
 
   // Countdown timer — reads from endRef which is now set from database
  const tick = setInterval(() => {
@@ -206,7 +202,6 @@ window.addEventListener('beforeunload', handleUnload)
       clearInterval(tick)
       clearInterval(sessionRefresh)
       stopInactivity()
-      window.removeEventListener('beforeunload', handleUnload)
       document.removeEventListener('click', handleClick)
     }
 }, [])

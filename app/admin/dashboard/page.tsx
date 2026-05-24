@@ -169,11 +169,7 @@ const stopInactivity = startInactivityTimer({
 })
 
 // ── 3. Tab close logout ──
-const handleUnload = async () => {
-  const supabase = createClient()
-  await supabase.auth.signOut({ scope: 'global' })
-}
-window.addEventListener('beforeunload', handleUnload)
+
 
   // Countdown timer
 const interval = setInterval(() => {
@@ -194,7 +190,6 @@ return () => {
   clearInterval(interval)
   clearInterval(sessionRefresh)
   stopInactivity()
-  window.removeEventListener('beforeunload', handleUnload)
 }
 }, [])
 
