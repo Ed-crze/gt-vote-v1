@@ -14,15 +14,6 @@ const FACULTY_DATA = [
   { name: 'Faculty of Applied Sci.', pct: 47 },
 ]
 
-const RESULTS_DATA = POSITIONS.map((pos, i) => {
-  const total = 312
-  const counts = pos.candidates.map((_, ci) => {
-    const base = [43, 36, 21, 57, 43, 46, 31, 22, 60, 40, 39, 35, 26, 53, 47]
-    return base[i * 3 + ci] || 33
-  })
-  return { title: pos.title, total, candidates: pos.candidates.map((c, ci) => ({ name: c.name, pct: counts[ci], votes: Math.round(total * counts[ci] / 100) })) }
-})
-
 export default function AdminDashboardPage() {
   const { navigateTo, fadingOut } = useNavigate()
   const [annOpen, setAnnOpen] = useState(false)
@@ -33,7 +24,18 @@ export default function AdminDashboardPage() {
  const [totalVoters, setTotalVoters] = useState(0)
 const [votesCast, setVotesCast] = useState(0)
 const [turnout, setTurnout] = useState(0)
-const [resultsData, setResultsData] = useState<typeof RESULTS_DATA>([])
+const [resultsData, setResultsData] = useState<{
+  title: string
+  total: number
+  candidates: { name: string; votes: number; pct: number }[]
+}[]>(
+  // Initialize with real positions and zero votes — no hardcoded data
+  POSITIONS.map(pos => ({
+    title: pos.title,
+    total: 0,
+    candidates: pos.candidates.map(c => ({ name: c.name, votes: 0, pct: 0 }))
+  }))
+)
 const [votingOpen, setVotingOpen] = useState(false)
 const endRef = useRef(Date.now() + 5 * 3600 * 1000)
 const [facultyTurnout, setFacultyTurnout] = useState<{ name: string; pct: number }[]>([])
@@ -220,7 +222,7 @@ async function handleVotingToggle() {
       totalVoters,
       votesCast,
       turnout,
-      resultsData: resultsData.length > 0 ? resultsData : RESULTS_DATA,
+      resultsData: resultsData,
       generatedAt: new Date().toLocaleString('en-GB', {
         day: '2-digit', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
@@ -317,23 +319,41 @@ async function handleVotingToggle() {
             <TrendingUp size={14} color="#C9A227" className="verify-icon-inline" /> Live Results
           </div>
           <div className="fade-up-3">
-           {(resultsData.length > 0 ? resultsData : RESULTS_DATA).map(pos => (
-              <div key={pos.title} className="admin-pos-result">
-                <div className="admin-pos-res-title">{pos.title} <span>{pos.total} votes</span></div>
-                {pos.candidates.map((c, ci) => (
-                  <div key={c.name} className="admin-cand-result">
-                    <div className="admin-cand-head">
-                      <div className="admin-cand-name">
-                        {c.name}
-                        {ci === 0 && <span className="admin-leading-badge">Leading</span>}
-                      </div>
-                      <div className="admin-cand-pct">{c.votes} ({c.pct}%)</div>
-                    </div>
-                    <div className="admin-res-bar-bg">
-                      <div className={`admin-result-bar${ci === 0 ? ' leader' : ''}`} style={{ width: barsReady ? `${c.pct}%` : '0%' }} />
-                    </div>
-                  </div>
-                ))}
+            {resultsData.map(pos => (
+             <div key={pos.title} className="admin-pos-result">
+  <div className="admin-pos-res-title">
+    {pos.title} <span>{pos.total} votes</span>
+  </div>
+  {pos.total === 0 ? (
+    <div style={{
+      textAlign: 'center',
+      padding: '1rem',
+      fontSize: '0.8rem',
+      color: 'rgba(255,255,255,0.3)',
+    }}>
+      No votes cast yet
+    </div>
+  ) : (
+    pos.candidates.map((c, ci) => (
+      <div key={c.name} className="admin-cand-result">
+        <div className="admin-cand-head">
+          <div className="admin-cand-name">
+            {c.name}
+            {ci === 0 && pos.total > 0 && (
+              <span className="admin-leading-badge">Leading</span>
+            )}
+          </div>
+          <div className="admin-cand-pct">{c.votes} ({c.pct}%)</div>
+        </div>
+        <div className="admin-res-bar-bg">
+          <div
+            className={`admin-result-bar${ci === 0 ? ' leader' : ''}`}
+            style={{ width: barsReady ? `${c.pct}%` : '0%' }}
+          />
+        </div>
+      </div>
+    ))
+                )}
               </div>
             ))}
           </div>
