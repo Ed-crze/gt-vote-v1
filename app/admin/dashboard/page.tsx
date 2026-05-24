@@ -5,7 +5,6 @@ import AdminNav from '@/components/AdminNav'
 import { createClient } from '@/lib/supabase/client'
 import { POSITIONS } from '@/lib/data'
 import { useNavigate } from '@/lib/hooks'
-import { startInactivityTimer } from '@/lib/inactivity'
 
 const FACULTY_DATA = [
   { name: 'Faculty of IT', pct: 82 },
@@ -159,14 +158,7 @@ const sessionRefresh = setInterval(async () => {
 }, 4 * 60 * 1000)
 
 // ── 2. Inactivity logout ──
-const stopInactivity = startInactivityTimer({
-  timeoutMs: 30 * 60 * 1000,
-  onTimeout: async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut({ scope: 'global' })
-    navigateTo('/admin?reason=inactivity')
-  }
-})
+
 
 // ── 3. Tab close logout ──
 
@@ -189,7 +181,6 @@ const interval = setInterval(() => {
 return () => {
   clearInterval(interval)
   clearInterval(sessionRefresh)
-  stopInactivity()
 }
 }, [])
 

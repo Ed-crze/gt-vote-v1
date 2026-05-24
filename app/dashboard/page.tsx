@@ -5,7 +5,6 @@ import { useNavigate } from '@/lib/hooks'
 import { createClient } from '@/lib/supabase/client'
 import { signOut } from '@/lib/auth-client'
 import PageBackground from '@/components/PageBackground'
-import { startInactivityTimer } from '@/lib/inactivity'
 
 export default function DashboardPage() {
   const { navigateTo, fadingOut } = useNavigate()
@@ -163,15 +162,6 @@ const sessionRefresh = setInterval(async () => {
   await supabase.auth.refreshSession()
 }, 4 * 60 * 1000)
 
-// ── 2. Inactivity — log out after 30 minutes of no interaction ──
-const stopInactivity = startInactivityTimer({
-  timeoutMs: 30 * 60 * 1000,
-  onTimeout: async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut({ scope: 'global' })
-    navigateTo('/login?reason=inactivity')
-  }
-})
 
 // ── 3. Tab close — log out when browser tab or window is closed ──
 
@@ -201,7 +191,6 @@ const stopInactivity = startInactivityTimer({
     return () => {
       clearInterval(tick)
       clearInterval(sessionRefresh)
-      stopInactivity()
       document.removeEventListener('click', handleClick)
     }
 }, [])
