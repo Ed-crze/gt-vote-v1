@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { X, FileText, Download } from 'lucide-react'
 import { GTV } from '@/lib/store'
 import { useNavigate } from '@/lib/hooks'
-import { POSITIONS } from '@/lib/data'
+import { createClient } from '@/lib/supabase/client'
 import type { Student } from '@/lib/types'
 
 export default function CandidatesPage() {
