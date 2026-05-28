@@ -2,60 +2,112 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { X, FileText, Download } from 'lucide-react'
-import { GTV } from '@/lib/store'
 import { useNavigate } from '@/lib/hooks'
-import { POSITIONS } from '@/lib/data'
-import type { Student } from '@/lib/types'
+import { createClient } from '@/lib/supabase/client'
+
+type Candidate = {
+  id: string
+  name: string
+  faculty: string
+  level: string
+  slogan: string
+  manifesto_url: string | null
+  avatar_url: string | null
+  position: string
+}
+
+type PositionGroup = {
+  title: string
+  candidates: Candidate[]
+}
+
+const POSITION_ORDER = [
+  'President',
+  'Vice President',
+  'General Secretary',
+  'Financial Secretary',
+  "Women's Commissioner",
+  'Sports Officer',
+]
+
+const TAB_LABELS = ['President', 'Vice President', 'Gen. Secretary', 'Fin. Secretary', "Women's Comm.", 'Sports Officer']
+
+const SECTION_LABELS = [
+  'PRESIDENTIAL CANDIDATES',
+  'VICE PRESIDENTIAL CANDIDATES',
+  'GENERAL SECRETARY CANDIDATES',
+  'FINANCIAL SECRETARY CANDIDATES',
+  "WOMEN'S COMMISSIONER CANDIDATES",
+  'SPORTS & RECREATION OFFICER CANDIDATES',
+]
+
+function getInitials(name: string) {
+  return name.split(' ').slice(0, 2).map(n => n[0]).join('')
+}
 
 export default function CandidatesPage() {
   const { navigateTo, fadingOut } = useNavigate()
   const [currentTab, setCurrentTab] = useState(0)
   const [modalOpen, setModalOpen] = useState(false)
-  const [modalPos, setModalPos] = useState(0)
-  const [modalCand, setModalCand] = useState(0)
-  const [user, setUser] = useState<Student | null>(null)
+  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null)
+  const [positions, setPositions] = useState<PositionGroup[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
-    setUser(GTV.getCurrentUser())
+    const supabase = createClient()
+
+    async function load() {
+      // Check if user is logged in
+      const { data: { user } } = await supabase.auth.getUser()
+      setIsLoggedIn(!!user)
+
+      // Load candidates from database
+      const { data, error } = await supabase
+        .from('candidates')
+        .select('id, full_name, position, faculty, level, slogan, manifesto_url, avatar_url')
+        .order('position')
+
+      if (data && !error) {
+        // Group by position in the correct order
+        const grouped = POSITION_ORDER.map(posTitle => ({
+          title: posTitle,
+          candidates: data
+            .filter(c => c.position === posTitle)
+            .map(c => ({
+              id: c.id,
+              name: c.full_name,
+              faculty: c.faculty ?? '',
+              level: c.level ?? '',
+              slogan: c.slogan ?? '',
+              manifesto_url: c.manifesto_url ?? null,
+              avatar_url: c.avatar_url ?? null,
+              position: c.position,
+            }))
+        }))
+        setPositions(grouped)
+      }
+
+      setLoading(false)
+    }
+
+    load()
   }, [])
 
-  function openModal(pos: number, cand: number) {
-    setModalPos(pos)
-    setModalCand(cand)
+  function openModal(candidate: Candidate) {
+    setSelectedCandidate(candidate)
     setModalOpen(true)
   }
 
-  const pos = POSITIONS[currentTab]
-  const candidate = POSITIONS[modalPos]?.candidates[modalCand]
-  const posTitle = POSITIONS[modalPos]?.title
-
-  // Short tab labels
-  const tabLabels = ['President', 'Vice President', 'Gen. Secretary', 'Fin. Secretary', "Women's Comm.", 'Sports Officer']
-
-  // Section label
-  const sectionLabels = [
-    'PRESIDENTIAL CANDIDATES',
-    'VICE PRESIDENTIAL CANDIDATES',
-    'GENERAL SECRETARY CANDIDATES',
-    'FINANCIAL SECRETARY CANDIDATES',
-    "WOMEN'S COMMISSIONER CANDIDATES",
-    'SPORTS & RECREATION OFFICER CANDIDATES',
-  ]
-
-
-  // Define this function once in your component (e.g. right above your return/JSX)
-const handleManifestoDownload = (candidate: { manifesto_url?: string | null | undefined }) => {
-  if (candidate.manifesto_url) {
-    window.open(candidate.manifesto_url, '_blank');
-  } else {
-    alert('Manifesto PDF not yet available for this candidate.');
+  function handleManifestoDownload(candidate: Candidate) {
+    if (candidate.manifesto_url) {
+      window.open(candidate.manifesto_url, '_blank')
+    } else {
+      alert('Manifesto PDF not yet available for this candidate.')
+    }
   }
-};
 
-  // Initials from name
-  function getInitials(name: string) {
-    return name.split(' ').slice(0, 2).map(n => n[0]).join('')
-  }
+  const currentPosition = positions[currentTab]
 
   return (
     <>
@@ -64,7 +116,7 @@ const handleManifestoDownload = (candidate: { manifesto_url?: string | null | un
         {/* Nav */}
         <nav className="cand-nav">
           <div className="cand-nav-left">
-            <Image src="/gctu-crest.png" alt="GCTU" width={36} height={36} className="cand-nav-crest"  loading="eager" priority/>
+            <Image src="/gctu-crest.png" alt="GCTU" width={36} height={36} className="cand-nav-crest" loading="eager" priority />
             <div className="cand-nav-title">GT<span>-Vote</span></div>
           </div>
           <button className="cand-nav-back" onClick={() => navigateTo('/dashboard')}>
@@ -82,7 +134,7 @@ const handleManifestoDownload = (candidate: { manifesto_url?: string | null | un
         {/* Position Tabs */}
         <div className="cand-tabs-wrap fade-up-2">
           <div className="cand-tabs hide-scrollbar">
-            {tabLabels.map((label, i) => (
+            {TAB_LABELS.map((label, i) => (
               <button
                 key={i}
                 id={`cand-tab-${i}`}
@@ -97,31 +149,69 @@ const handleManifestoDownload = (candidate: { manifesto_url?: string | null | un
 
         {/* Section Label */}
         <div className="cand-section-label fade-up-3">
-          {sectionLabels[currentTab]}
+          {SECTION_LABELS[currentTab]}
         </div>
 
         {/* Candidate Cards */}
         <div className="cand-grid fade-up-3">
-          {pos.candidates.map((cand, ci) => (
-            <div key={cand.name} className="cand-card">
-              <div className="cand-avatar">
-                <span>{getInitials(cand.name)}</span>
-              </div>
-              <div className="cand-name">{cand.name}</div>
-              <div className="cand-faculty">{cand.faculty}</div>
-              <div className="cand-slogan">"{cand.slogan}"</div>
-              <button className="cand-view-btn" onClick={() => openModal(currentTab, ci)}>
-                View Profile
-              </button>
+          {loading ? (
+            <div style={{
+              gridColumn: '1 / -1',
+              textAlign: 'center',
+              padding: '3rem',
+              color: 'rgba(255,255,255,0.4)',
+              fontSize: '0.9rem',
+            }}>
+              <span className="spin" style={{
+                display: 'inline-block', width: '24px', height: '24px',
+                border: '3px solid rgba(201,162,39,0.3)',
+                borderTopColor: '#C9A227', borderRadius: '50%',
+                marginBottom: '12px',
+              }} />
+              <div>Loading candidates...</div>
             </div>
-          ))}
+          ) : !currentPosition || currentPosition.candidates.length === 0 ? (
+            <div style={{
+              gridColumn: '1 / -1',
+              textAlign: 'center',
+              padding: '3rem',
+              color: 'rgba(255,255,255,0.4)',
+              fontSize: '0.9rem',
+            }}>
+              No candidates registered for this position yet.
+            </div>
+          ) : (
+            currentPosition.candidates.map(cand => (
+              <div key={cand.id} className="cand-card">
+                <div className="cand-avatar">
+                  {cand.avatar_url ? (
+                    <img
+                      src={cand.avatar_url}
+                      alt={cand.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                    />
+                  ) : (
+                    <span>{getInitials(cand.name)}</span>
+                  )}
+                </div>
+                <div className="cand-name">{cand.name}</div>
+                <div className="cand-faculty">{cand.faculty}</div>
+                {cand.slogan && (
+                  <div className="cand-slogan">&quot;{cand.slogan}&quot;</div>
+                )}
+                <button className="cand-view-btn" onClick={() => openModal(cand)}>
+                  View Profile
+                </button>
+              </div>
+            ))
+          )}
         </div>
 
         {/* Bottom Bar */}
         <div className="cand-bottom-bar">
           <button
             className="cand-proceed-btn"
-            onClick={() => navigateTo(user ? '/ballot' : '/login')}
+            onClick={() => navigateTo(isLoggedIn ? '/ballot' : '/login')}
           >
             PROCEED TO VOTE →
           </button>
@@ -136,28 +226,45 @@ const handleManifestoDownload = (candidate: { manifesto_url?: string | null | un
       >
         <div className="cand-modal">
           <div className="cand-modal-handle" />
-          <button className="cand-modal-close" onClick={() => setModalOpen(false)}><X size={14} /></button>
+          <button className="cand-modal-close" onClick={() => setModalOpen(false)}>
+            <X size={14} />
+          </button>
 
-          {candidate && (
+          {selectedCandidate && (
             <>
               <div className="cand-modal-avatar">
-                <span>{getInitials(candidate.name)}</span>
+                {selectedCandidate.avatar_url ? (
+                  <img
+                    src={selectedCandidate.avatar_url}
+                    alt={selectedCandidate.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                  />
+                ) : (
+                  <span>{getInitials(selectedCandidate.name)}</span>
+                )}
               </div>
-              <div className="cand-modal-name">{candidate.name}</div>
-              <div className="cand-modal-position">{posTitle}</div>
-              <div className="cand-modal-faculty">{candidate.faculty}</div>
-              <div className="cand-modal-slogan">"{candidate.slogan}"</div>
+              <div className="cand-modal-name">{selectedCandidate.name}</div>
+              <div className="cand-modal-position">{selectedCandidate.position}</div>
+              <div className="cand-modal-faculty">{selectedCandidate.faculty}</div>
+              {selectedCandidate.level && (
+                <div className="cand-modal-faculty" style={{ fontSize: '0.78rem', opacity: 0.7 }}>
+                  Level {selectedCandidate.level}
+                </div>
+              )}
+              {selectedCandidate.slogan && (
+                <div className="cand-modal-slogan">&quot;{selectedCandidate.slogan}&quot;</div>
+              )}
               <div className="cand-modal-hl-title">
-                <FileText size={13} className="verify-icon-inline" /> Manifesto Highlights
+                <FileText size={13} className="verify-icon-inline" /> Manifesto
               </div>
-              <div className="cand-modal-hl">
-                {candidate.highlights.map((h, i) => (
-                  <div key={i}>• {h}</div>
-                ))}
-              </div>
-              <button className="cand-modal-dl-btn" onClick={() => handleManifestoDownload(candidate)}>
+              <button
+                className="cand-modal-dl-btn"
+                onClick={() => handleManifestoDownload(selectedCandidate)}
+              >
                 <Download size={14} className="verify-icon-inline" />
-                {candidate.manifesto_url ? 'Download Full Manifesto (PDF)' : 'Manifesto Coming Soon'}
+                {selectedCandidate.manifesto_url
+                  ? 'Download Full Manifesto (PDF)'
+                  : 'Manifesto Coming Soon'}
               </button>
             </>
           )}
