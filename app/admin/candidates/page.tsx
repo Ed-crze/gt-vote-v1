@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 //type CandidateRow = { name: string; position: string; faculty: string; level: string }
 
 // Add
-type CandidateRow = {id: string; name: string ;position: string ;faculty: string ;level: string ;slogan: string }
+type CandidateRow = {id: string; name: string ;position: string ;faculty: string ;level: string ;slogan: string ;avatar_url:string | null }
 
 
 
@@ -33,6 +33,9 @@ export default function AdminCandidatesPage() {
   const [formLevel, setFormLevel] = useState('')
   const [formSlogan, setFormSlogan] = useState('')
   const [toast, setToast] = useState('')
+  const [formPhoto, setFormPhoto] = useState<File | null>(null)
+  const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
 
  useEffect(() => {
   const supabase = createClient()
@@ -43,21 +46,22 @@ export default function AdminCandidatesPage() {
       navigateTo('/admin'); return
     }
 
-    const { data } = await supabase
-      .from('candidates')
-      .select('id, full_name, position, faculty, level, slogan')
-      .order('position')
+  const { data } = await supabase
+  .from('candidates')
+  .select('id, full_name, position, faculty, level, slogan, avatar_url')
+  .order('position')
 
-    if (data) {
-      setCandidates(data.map(c => ({
-        id: c.id,
-        name: c.full_name,
-        position: c.position,
-        faculty: c.faculty ?? '',
-        level: c.level ?? '',
-        slogan: c.slogan ?? '',
-      })))
-    }
+if (data) {
+  setCandidates(data.map(c => ({
+    id: c.id,
+    name: c.full_name,
+    position: c.position,
+    faculty: c.faculty ?? '',
+    level: c.level ?? '',
+    slogan: c.slogan ?? '',
+    avatar_url: c.avatar_url ?? null,
+  })))
+}
   }
 
   load()
@@ -72,13 +76,15 @@ export default function AdminCandidatesPage() {
     return matchFilter && matchSearch
   })
 
-  function openAdd() {
-    setEditIndex(null)
-    setFormName(''); setFormPosition(''); setFormFaculty(''); setFormLevel(''); setFormSlogan('')
-    setModalOpen(true)
-  }
+ function openAdd() {
+  setEditIndex(null)
+  setFormName(''); setFormPosition(''); setFormFaculty('')
+  setFormLevel(''); setFormSlogan('')
+  setFormPhoto(null); setFormPhotoPreview(null)
+  setModalOpen(true)
+}
 
-  function openEdit(i: number) {
+ function openEdit(i: number) {
   const c = filtered[i]
   setEditIndex(candidates.indexOf(c))
   setFormName(c.name)
@@ -86,37 +92,78 @@ export default function AdminCandidatesPage() {
   setFormFaculty(c.faculty)
   setFormLevel(c.level)
   setFormSlogan(c.slogan)
+  setFormPhoto(null)
+  setFormPhotoPreview(c.avatar_url ?? null)
   setModalOpen(true)
 }
 
 async function saveCandidate() {
-  if (!formName || !formPosition) { showToast('Please fill in name and position'); return }
+  if (!formName || !formPosition) {
+    showToast('Please fill in name and position')
+    return
+  }
+
   const supabase = createClient()
+  let avatarUrl: string | null = null
+
+  // Upload photo if one was selected
+  if (formPhoto) {
+    setUploadingPhoto(true)
+    const fileExt = formPhoto.name.split('.').pop()
+    const fileName = `${Date.now()}-${formName.replace(/\s+/g, '-').toLowerCase()}.${fileExt}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('candidate-photos')
+      .upload(fileName, formPhoto, { upsert: true })
+
+    if (uploadError) {
+      showToast('Failed to upload photo')
+      setUploadingPhoto(false)
+      return
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('candidate-photos')
+      .getPublicUrl(fileName)
+
+    avatarUrl = urlData.publicUrl
+    setUploadingPhoto(false)
+  }
 
   if (editIndex !== null) {
-    // Update existing
     const candidate = candidates[editIndex]
+    const updateData: any = {
+      full_name: formName,
+      position: formPosition,
+      faculty: formFaculty,
+      level: formLevel,
+      slogan: formSlogan,
+    }
+    // Only update avatar_url if a new photo was uploaded
+    if (avatarUrl) updateData.avatar_url = avatarUrl
+
     const { error } = await supabase
       .from('candidates')
-      .update({
-        full_name: formName,
-        position: formPosition,
-        faculty: formFaculty,
-        level: formLevel,
-        slogan: formSlogan,
-      })
+      .update(updateData)
       .eq('id', candidate.id)
 
     if (!error) {
       const updated = [...candidates]
-      updated[editIndex] = { ...candidate, name: formName, position: formPosition, faculty: formFaculty, level: formLevel, slogan: formSlogan }
+      updated[editIndex] = {
+        ...candidate,
+        name: formName,
+        position: formPosition,
+        faculty: formFaculty,
+        level: formLevel,
+        slogan: formSlogan,
+        avatar_url: avatarUrl ?? candidate.avatar_url,
+      }
       setCandidates(updated)
       showToast('Candidate updated')
     } else {
       showToast('Failed to update candidate')
     }
   } else {
-    // Insert new
     const { data, error } = await supabase
       .from('candidates')
       .insert({
@@ -125,6 +172,7 @@ async function saveCandidate() {
         faculty: formFaculty,
         level: formLevel,
         slogan: formSlogan,
+        avatar_url: avatarUrl,
       })
       .select()
       .single()
@@ -137,6 +185,7 @@ async function saveCandidate() {
         faculty: data.faculty ?? '',
         level: data.level ?? '',
         slogan: data.slogan ?? '',
+        avatar_url: data.avatar_url ?? null,
       }])
       showToast('Candidate added')
     } else {
@@ -259,15 +308,97 @@ async function doDelete() {
               <input className="admin-form-input" placeholder="e.g. 400" value={formLevel} onChange={e => setFormLevel(e.target.value)} />
             </div>
           </div>
+
+{/* Photo Upload */}
           <div className="admin-form-field">
+            <label className="admin-form-label">Candidate Photo</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {/* Preview */}
+              <div style={{
+                width: '72px', height: '72px', borderRadius: '50%',
+                background: 'rgba(255,255,255,0.05)',
+                border: '2px dashed rgba(201,162,39,0.4)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden', flexShrink: 0,
+              }}>
+                {formPhotoPreview ? (
+                  <img
+                    src={formPhotoPreview}
+                    alt="Preview"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <span style={{ fontSize: '1.5rem', color: 'rgba(255,255,255,0.2)' }}>📷</span>
+                )}
+              </div>
+
+              {/* Upload button */}
+              <div style={{ flex: 1 }}>
+                <label style={{
+                  display: 'inline-block',
+                  padding: '8px 16px',
+                  background: 'rgba(201,162,39,0.15)',
+                  border: '1px solid rgba(201,162,39,0.3)',
+                  borderRadius: '8px',
+                  color: '#C9A227',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  marginBottom: '6px',
+                }}>
+                  {formPhotoPreview ? 'Change Photo' : 'Upload Photo'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={e => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      if (file.size > 2 * 1024 * 1024) {
+                        showToast('Photo must be under 2MB')
+                        return
+                      }
+                      setFormPhoto(file)
+                      setFormPhotoPreview(URL.createObjectURL(file))
+                    }}
+                  />
+                </label>
+                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.3)' }}>
+                  JPG or PNG, max 2MB. Square photos work best.
+                </div>
+                {formPhotoPreview && (
+                  <button
+                    onClick={() => { setFormPhoto(null); setFormPhotoPreview(null) }}
+                    style={{
+                      background: 'none', border: 'none', color: '#EF4444',
+                      fontSize: '0.75rem', cursor: 'pointer', padding: 0, marginTop: '4px',
+                    }}
+                  >
+                    Remove photo
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+      <div className="admin-form-field">
             <label className="admin-form-label">Campaign Slogan</label>
             <input className="admin-form-input" placeholder="e.g. A future built on unity" value={formSlogan} onChange={e => setFormSlogan(e.target.value)} />
           </div>
           <div className="admin-form-btns">
             <button className="admin-btn-cancel" onClick={() => setModalOpen(false)}>Cancel</button>
-            <button className="admin-btn-save" onClick={saveCandidate}>
-              <CheckSquare size={16} className="verify-icon-inline" /> Save Candidate
-            </button>
+            <button className="admin-btn-save" onClick={saveCandidate} disabled={uploadingPhoto}>
+  {uploadingPhoto ? (
+    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <span className="spin" style={{
+        display: 'inline-block', width: '14px', height: '14px',
+        border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%'
+      }} />
+      Uploading...
+    </span>
+  ) : (
+    <><CheckSquare size={16} className="verify-icon-inline" /> Save Candidate</>
+  )}
+</button>
           </div>
         </div>
       </div>

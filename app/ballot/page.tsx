@@ -1,74 +1,137 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { ChevronRight, ChevronLeft, Users } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { hashStudentId, saveReceiptToSession } from '@/lib/auth-client'
 import { useNavigate } from '@/lib/hooks'
-import { POSITIONS } from '@/lib/data'
 
+type Candidate = {
+  id: string
+  name: string
+  faculty: string
+  level: string
+  slogan: string
+  avatar_url: string | null
+  highlights?: string[]
+}
 
-const TOTAL = POSITIONS.length
+type Position = {
+  id: string
+  title: string
+  candidates: Candidate[]
+}
+
+const POSITION_ORDER = [
+  'President',
+  'Vice President',
+  'General Secretary',
+  'Financial Secretary',
+  "Women's Commissioner",
+  'Sports Officer',
+]
+
+function getInitials(name: string) {
+  return name.split(' ').slice(0, 2).map(n => n[0]).join('')
+}
 
 export default function BallotPage() {
   const { navigateTo, fadingOut } = useNavigate()
+
   const [user, setUser] = useState<{
-  id: string
-  name: string
-  studentId: string
-} | null>(null)
+    id: string
+    name: string
+    studentId: string
+  } | null>(null)
+
+  const [positions, setPositions] = useState<Position[]>([])
+  const [loading, setLoading] = useState(true)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [currentTab, setCurrentTab] = useState(0)
-  const [selections, setSelections] = useState<(number | null)[]>(Array(TOTAL).fill(null))
+  const [selections, setSelections] = useState<(number | null)[]>([])
   const [infoOpen, setInfoOpen] = useState(false)
   const [infoPending, setInfoPending] = useState<{ pos: number; cand: number } | null>(null)
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const [successVisible, setSuccessVisible] = useState(false)
   const [receiptCode, setReceiptCode] = useState('')
   const [copied, setCopied] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
- useEffect(() => {
-  const supabase = createClient()
+  useEffect(() => {
+    const supabase = createClient()
 
-  async function loadUser() {
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (!authUser) { navigateTo('/login'); return }
+    async function loadData() {
+      // Auth check
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) { navigateTo('/login'); return }
 
-    // Get student profile
-    const { data: profile } = await supabase
-      .from('students')
-      .select('full_name, student_id')
-      .eq('id', authUser.id)
-      .single()
+      // Get student profile
+      const { data: profile } = await supabase
+        .from('students')
+        .select('full_name, student_id')
+        .eq('id', authUser.id)
+        .single()
 
-    if (!profile) { navigateTo('/login'); return }
+      if (!profile) { navigateTo('/login'); return }
 
-    // Check if already voted
-    const hash = await hashStudentId(profile.student_id)
-    const { data: registry } = await supabase
-      .from('voter_registry')
-      .select('has_voted')
-      .eq('student_id_hash', hash)
-      .single()
+      // Check if already voted
+      const hash = await hashStudentId(profile.student_id)
+      const { data: registry } = await supabase
+        .from('voter_registry')
+        .select('has_voted')
+        .eq('student_id_hash', hash)
+        .single()
 
-    if (registry?.has_voted) { navigateTo('/dashboard'); return }
+      if (registry?.has_voted) { navigateTo('/dashboard'); return }
 
-    setUser({
-      id: authUser.id,
-      name: profile.full_name,
-      studentId: profile.student_id,
-    })
-  }
+      setUser({
+        id: authUser.id,
+        name: profile.full_name,
+        studentId: profile.student_id,
+      })
 
-  loadUser()
-}, [])
+      // Load candidates from database
+      const { data: candidateData, error } = await supabase
+        .from('candidates')
+        .select('id, full_name, position, faculty, level, slogan, avatar_url')
+        .order('position')
+
+      if (candidateData && !error) {
+        const grouped = POSITION_ORDER
+          .map(posTitle => ({
+            id: posTitle.toLowerCase().replace(/\s+/g, '-'),
+            title: posTitle,
+            candidates: candidateData
+              .filter(c => c.position === posTitle)
+              .map(c => ({
+                id: c.id,
+                name: c.full_name,
+                faculty: c.faculty ?? '',
+                level: c.level ?? '',
+                slogan: c.slogan ?? '',
+                avatar_url: c.avatar_url ?? null,
+              }))
+          }))
+          .filter(p => p.candidates.length > 0) // only show positions with candidates
+
+        setPositions(grouped)
+        setSelections(Array(grouped.length).fill(null))
+      }
+
+      setLoading(false)
+    }
+
+    loadData()
+  }, [])
 
   useEffect(() => {
     const el = tabRefs.current[currentTab]
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
   }, [currentTab])
 
+  const TOTAL = positions.length
   const doneCnt = selections.filter(s => s !== null).length
-  const allDone = doneCnt === TOTAL
+  const allDone = doneCnt === TOTAL && TOTAL > 0
 
   function selectCandidate(pos: number, cand: number) {
     setSelections(prev => {
@@ -91,66 +154,59 @@ export default function BallotPage() {
 
   function nextOrSubmit() {
     if (currentTab < TOTAL - 1) setCurrentTab(currentTab + 1)
-    else setReviewOpen(true)
+    else { setSubmitError(''); setReviewOpen(true) }
   }
 
- async function submitBallot() {
-  if (!user) return
+  async function submitBallot() {
+    if (!user) return
+    setSubmitting(true)
+    setSubmitError('')
 
-  try {
-    const supabase = createClient()
+    try {
+      const supabase = createClient()
 
-    // Build votes array for the submit_vote function
-    const votes = POSITIONS
-      .map((pos, i) => {
-        if (selections[i] === null) return null
-        const candidate = pos.candidates[selections[i]!]
-        return {
-          candidate_id: candidate.id, // make sure your POSITIONS data has candidate IDs
-          position: pos.title,
-        }
-      })
-      .filter(Boolean)
+      const votes = positions
+        .map((pos, i) => {
+          if (selections[i] === null) return null
+          const candidate = pos.candidates[selections[i]!]
+          return {
+            candidate_id: candidate.id,
+            position: pos.title,
+          }
+        })
+        .filter(Boolean)
 
-    // Hash the student ID for the Voting Paradox
-    const hash = await hashStudentId(user.studentId)
+      const hash = await hashStudentId(user.studentId)
 
-    // Call the submit_vote database function
-    const { data: receipt, error } = await supabase
-      .rpc('submit_vote', {
+      const { data: receipt, error } = await supabase.rpc('submit_vote', {
         p_student_id_hash: hash,
         p_votes: votes,
       })
 
-    console.log('submit_vote response:', { receipt, error })
-    console.log('votes being sent:', JSON.stringify(votes))
-    console.log('hash:', hash)
-
-    if (error) {
-      console.error('Supabase error:', error.message, error.code, error.details, error.hint)
-      if (error.message?.includes('ALREADY_VOTED')) {
-        navigateTo('/dashboard')
-        return
+      if (error) {
+        if (error.message?.includes('ALREADY_VOTED')) {
+          navigateTo('/dashboard')
+          return
+        }
+        throw error
       }
-      throw error
+
+      await saveReceiptToSession(receipt)
+      sessionStorage.setItem('gt_receipt', receipt)
+
+      setReceiptCode(receipt)
+      setReviewOpen(false)
+      setSuccessVisible(true)
+      setTimeout(() => navigateTo('/dashboard?voted=true'), 4500)
+
+    } catch (err: any) {
+      console.error('Vote submission failed:', err)
+      setSubmitError(err?.message || 'Something went wrong. Please try again.')
+    } finally {
+      setSubmitting(false)
     }
-
-    // Save receipt to session so dashboard can display it
-    await saveReceiptToSession(receipt)
-
-    // Store in sessionStorage as backup
-    sessionStorage.setItem('gt_receipt', receipt)
-
-    setReceiptCode(receipt)
-    setReviewOpen(false)
-    setSuccessVisible(true)
-    setTimeout(() => navigateTo('/dashboard?voted=true'), 4500)
-
-  } catch (err) {
-    console.error('Vote submission failed:', err)
-    alert('Something went wrong submitting your vote. Please try again.')
   }
-}
+
   function copyCode() {
     if (!receiptCode) return
     navigator.clipboard?.writeText(receiptCode).then(() => {
@@ -159,12 +215,27 @@ export default function BallotPage() {
     })
   }
 
-  if (!user) return null
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: '#0D1B3E', flexDirection: 'column', gap: '16px',
+      }}>
+        <span className="spin" style={{
+          display: 'inline-block', width: '32px', height: '32px',
+          border: '3px solid rgba(201,162,39,0.3)', borderTopColor: '#C9A227', borderRadius: '50%',
+        }} />
+        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>Loading ballot...</div>
+      </div>
+    )
+  }
 
-  const pos = POSITIONS[currentTab]
-  const isThree = pos.candidates.length === 3
-  const infoPos = infoPending ? POSITIONS[infoPending.pos] : null
-  const infoCand = infoPending ? POSITIONS[infoPending.pos].candidates[infoPending.cand] : null
+  if (!user || positions.length === 0) return null
+
+  const pos = positions[currentTab]
+  const isThree = pos?.candidates.length === 3
+  const infoPos = infoPending ? positions[infoPending.pos] : null
+  const infoCand = infoPending ? positions[infoPending.pos]?.candidates[infoPending.cand] : null
   const isAlreadySelected = infoPending !== null && selections[infoPending.pos] === infoPending.cand
 
   return (
@@ -175,7 +246,7 @@ export default function BallotPage() {
         {/* Top Nav */}
         <nav className="ballot-nav">
           <div className="ballot-nav-left">
-            <img src="/gctu-crest.png" alt="GCTU" className="ballot-nav-crest"  loading="eager"/>
+            <img src="/gctu-crest.png" alt="GCTU" className="ballot-nav-crest" loading="eager" />
             <div className="ballot-nav-title">GT<span>-Vote</span></div>
           </div>
           <div className="ballot-nav-prog">{doneCnt} of {TOTAL} done</div>
@@ -194,14 +265,14 @@ export default function BallotPage() {
             <strong>{doneCnt} / {TOTAL}</strong>
           </div>
           <div className="ballot-prog-bar">
-            <div className="ballot-prog-fill" style={{ width: `${(doneCnt / TOTAL) * 100}%` }} />
+            <div className="ballot-prog-fill" style={{ width: `${TOTAL > 0 ? (doneCnt / TOTAL) * 100 : 0}%` }} />
           </div>
         </div>
 
         {/* Tabs */}
         <div className="ballot-tabs-wrap fade-up-3">
           <div className="ballot-tabs hide-scrollbar">
-            {POSITIONS.map((p, i) => (
+            {positions.map((p, i) => (
               <button
                 key={p.id}
                 ref={el => { tabRefs.current[i] = el }}
@@ -218,20 +289,43 @@ export default function BallotPage() {
         {/* Candidate Cards */}
         <div className="ballot-panels fade-up-4">
           <div className="ballot-pos-title">{pos.title}</div>
-          <div className="ballot-pos-sub">Tap a candidate to view highlights and select</div>
+          <div className="ballot-pos-sub">Tap a candidate to view details and select</div>
           <div className={`ballot-c-grid${isThree ? ' three' : ''}`}>
             {pos.candidates.map((cand, ci) => {
               const selected = selections[currentTab] === ci
               return (
                 <div
-                  key={cand.name}
+                  key={cand.id}
                   className={`ballot-c-card${selected ? ' selected' : ''}`}
                   onClick={() => openInfo(currentTab, ci)}
                 >
                   <div className={`ballot-c-check${selected ? ' show' : ''}`}>✓</div>
-                  <div className="ballot-c-avatar-wrap">
-                    <Users size={28} color={selected ? '#C9A227' : 'rgba(255,255,255,0.4)'} />
+
+                  {/* Photo or initials */}
+                  <div className="ballot-c-avatar-wrap" style={{
+                    width: '64px', height: '64px', borderRadius: '50%',
+                    overflow: 'hidden', margin: '0 auto 10px',
+                    background: selected ? 'rgba(201,162,39,0.15)' : 'rgba(255,255,255,0.08)',
+                    border: selected ? '2px solid #C9A227' : '2px solid rgba(255,255,255,0.1)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    {cand.avatar_url ? (
+                      <img
+                        src={cand.avatar_url}
+                        alt={cand.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <span style={{
+                        fontSize: '1.2rem', fontWeight: 700,
+                        color: selected ? '#C9A227' : 'rgba(255,255,255,0.5)',
+                      }}>
+                        {getInitials(cand.name)}
+                      </span>
+                    )}
                   </div>
+
                   <div className="ballot-c-name">{cand.name}</div>
                   <div className="ballot-c-fac">{cand.faculty}</div>
                   <div className={`ballot-c-btn${selected ? ' selected' : ''}`}>
@@ -265,7 +359,6 @@ export default function BallotPage() {
             </button>
           </div>
         </div>
-
       </div>
 
       {/* Candidate Info Sheet */}
@@ -278,21 +371,43 @@ export default function BallotPage() {
           {infoCand && infoPos && (
             <>
               <div className="ballot-info-head">
-                <div className="ballot-info-av-wrap">
-                  <Users size={26} color="rgba(255,255,255,0.5)" />
+                {/* Photo in info sheet */}
+                <div style={{
+                  width: '56px', height: '56px', borderRadius: '50%',
+                  overflow: 'hidden', flexShrink: 0,
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '2px solid rgba(201,162,39,0.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {infoCand.avatar_url ? (
+                    <img
+                      src={infoCand.avatar_url}
+                      alt={infoCand.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#C9A227' }}>
+                      {getInitials(infoCand.name)}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <div className="ballot-info-nm">{infoCand.name}</div>
                   <div className="ballot-info-fc">{infoCand.faculty}</div>
+                  {infoCand.level && (
+                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>
+                      Level {infoCand.level}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="ballot-info-slogan">"{infoCand.slogan}"</div>
-              <div className="ballot-info-hl-title">Manifesto Highlights</div>
-              <div className="ballot-info-hl">
-                {infoCand.highlights.map((h, i) => (
-                  <div key={i}>• {h}</div>
-                ))}
-              </div>
+
+              {infoCand.slogan && (
+                <div className="ballot-info-slogan">&quot;{infoCand.slogan}&quot;</div>
+              )}
+
+              <div className="ballot-info-hl-title">Running for: {infoPos.title}</div>
+
               <button
                 className={`ballot-info-sel-btn${isAlreadySelected ? ' already' : ''}`}
                 onClick={confirmSelect}
@@ -316,21 +431,83 @@ export default function BallotPage() {
           <div className="ballot-rev-handle" />
           <div className="ballot-rev-title">Review Your Ballot</div>
           <div className="ballot-rev-sub">Confirm your choices before submitting.</div>
-          {POSITIONS.map((p, i) => (
+
+          {positions.map((p, i) => (
             <div key={p.id} className="ballot-rev-row">
               <div className="ballot-rev-pos">{p.title}</div>
-              <div className="ballot-rev-name">
-                {selections[i] !== null ? p.candidates[selections[i]!].name : '-'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {/* Mini photo in review */}
+                {selections[i] !== null && (
+                  <div style={{
+                    width: '32px', height: '32px', borderRadius: '50%',
+                    overflow: 'hidden', flexShrink: 0,
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(201,162,39,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {p.candidates[selections[i]!]?.avatar_url ? (
+                      <img
+                        src={p.candidates[selections[i]!]!.avatar_url!}
+                        alt={p.candidates[selections[i]!]!.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#C9A227' }}>
+                        {getInitials(p.candidates[selections[i]!]?.name ?? '')}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="ballot-rev-name">
+                  {selections[i] !== null ? p.candidates[selections[i]!].name : '-'}
+                </div>
               </div>
             </div>
           ))}
+
+          {/* Inline error instead of alert */}
+          {submitError && (
+            <div style={{
+              background: 'rgba(239,68,68,0.1)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              margin: '12px 0',
+              fontSize: '0.85rem',
+              color: '#EF4444',
+              display: 'flex', gap: '8px', alignItems: 'flex-start',
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" style={{ flexShrink: 0, marginTop: '1px' }} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              {submitError}
+            </div>
+          )}
+
           <div className="ballot-rev-warn">
             This action cannot be undone. Your ballot is anonymous and encrypted.
           </div>
-          <button className="ballot-btn-confirm" onClick={submitBallot}>
-            Submit My Ballot
+
+          <button
+            className="ballot-btn-confirm"
+            onClick={submitBallot}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <span className="spin" style={{
+                  display: 'inline-block', width: '15px', height: '15px',
+                  border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%',
+                }} />
+                Submitting...
+              </span>
+            ) : 'Submit My Ballot'}
           </button>
-          <button className="ballot-btn-edit" onClick={() => setReviewOpen(false)}>
+          <button
+            className="ballot-btn-edit"
+            onClick={() => { setReviewOpen(false); setSubmitError('') }}
+          >
             Go Back and Edit
           </button>
         </div>
