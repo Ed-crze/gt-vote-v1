@@ -314,7 +314,7 @@ export default function BallotPage() {
                       <img
                         src={cand.avatar_url}
                         alt={cand.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover',objectPosition: 'top center' }}
                       />
                     ) : (
                       <span style={{
@@ -383,7 +383,7 @@ export default function BallotPage() {
                     <img
                       src={infoCand.avatar_url}
                       alt={infoCand.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover',objectPosition: 'top center'}}
                     />
                   ) : (
                     <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#C9A227' }}>
@@ -449,7 +449,7 @@ export default function BallotPage() {
                       <img
                         src={p.candidates[selections[i]!]!.avatar_url!}
                         alt={p.candidates[selections[i]!]!.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover',objectPosition: 'top center'}}
                       />
                     ) : (
                       <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#C9A227' }}>

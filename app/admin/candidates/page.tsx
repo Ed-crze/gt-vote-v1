@@ -325,7 +325,7 @@ async function doDelete() {
                   <img
                     src={formPhotoPreview}
                     alt="Preview"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover',objectPosition: 'top center'}}
                   />
                 ) : (
                   <span style={{ fontSize: '1.5rem', color: 'rgba(255,255,255,0.2)' }}>📷</span>

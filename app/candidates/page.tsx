@@ -188,7 +188,7 @@ export default function CandidatesPage() {
                     <img
                       src={cand.avatar_url}
                       alt={cand.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%',objectPosition: 'top center' }}
                     />
                   ) : (
                     <span>{getInitials(cand.name)}</span>
@@ -237,7 +237,7 @@ export default function CandidatesPage() {
                   <img
                     src={selectedCandidate.avatar_url}
                     alt={selectedCandidate.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top center',borderRadius: '50%' }}
                   />
                 ) : (
                   <span>{getInitials(selectedCandidate.name)}</span>
