@@ -36,6 +36,7 @@ export default function AdminCandidatesPage() {
   const [formPhoto, setFormPhoto] = useState<File | null>(null)
   const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [photoRemoved, setPhotoRemoved] = useState(false)
 
  useEffect(() => {
   const supabase = createClient()
@@ -81,6 +82,7 @@ if (data) {
   setFormName(''); setFormPosition(''); setFormFaculty('')
   setFormLevel(''); setFormSlogan('')
   setFormPhoto(null); setFormPhotoPreview(null)
+   setPhotoRemoved(false)
   setModalOpen(true)
 }
 
@@ -93,6 +95,7 @@ if (data) {
   setFormLevel(c.level)
   setFormSlogan(c.slogan)
   setFormPhoto(null)
+    setPhotoRemoved(false) 
   setFormPhotoPreview(c.avatar_url ?? null)
   setModalOpen(true)
 }
@@ -130,18 +133,24 @@ async function saveCandidate() {
     setUploadingPhoto(false)
   }
 
-  if (editIndex !== null) {
-    const candidate = candidates[editIndex]
-    const updateData: any = {
-      full_name: formName,
-      position: formPosition,
-      faculty: formFaculty,
-      level: formLevel,
-      slogan: formSlogan,
-    }
-    // Only update avatar_url if a new photo was uploaded
-    if (avatarUrl) updateData.avatar_url = avatarUrl
+ if (editIndex !== null) {
+  const candidate = candidates[editIndex]
+  const updateData: any = {
+    full_name: formName,
+    position: formPosition,
+    faculty: formFaculty,
+    level: formLevel,
+    slogan: formSlogan,
+  }
 
+   if (avatarUrl) {
+     // New photo uploaded
+     updateData.avatar_url = avatarUrl
+   } else if (photoRemoved) {
+     // Explicitly removed — clear from database
+     updateData.avatar_url = null
+   }
+// Otherwise keep existing photo unchanged
     const { error } = await supabase
       .from('candidates')
       .update(updateData)
@@ -156,7 +165,7 @@ async function saveCandidate() {
         faculty: formFaculty,
         level: formLevel,
         slogan: formSlogan,
-        avatar_url: avatarUrl ?? candidate.avatar_url,
+        avatar_url: avatarUrl ?? (photoRemoved ? null : candidate.avatar_url),
       }
       setCandidates(updated)
       showToast('Candidate updated')
@@ -192,7 +201,8 @@ async function saveCandidate() {
       showToast('Failed to add candidate')
     }
   }
-
+  setPhotoRemoved(false)
+  setModalOpen(false)
   setModalOpen(false)
 }
 
@@ -368,7 +378,11 @@ async function doDelete() {
                 </div>
                 {formPhotoPreview && (
                   <button
-                    onClick={() => { setFormPhoto(null); setFormPhotoPreview(null) }}
+                    onClick={() => {
+                      setFormPhoto(null)
+                      setFormPhotoPreview(null)
+                      setPhotoRemoved(true)
+                    }}
                     style={{
                       background: 'none', border: 'none', color: '#EF4444',
                       fontSize: '0.75rem', cursor: 'pointer', padding: 0, marginTop: '4px',
