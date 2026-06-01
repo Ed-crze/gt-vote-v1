@@ -12,9 +12,9 @@ type CandidateRow = {id: string; name: string ;position: string ;faculty: string
 
 
 
-const POSITION_OPTIONS = ['President', 'Vice President', 'General Secretary', 'Financial Secretary', "Women's Commissioner", 'Sports Officer']
-const FILTER_OPTIONS = ['All', ...POSITION_OPTIONS]
+const DEFAULT_POSITIONS = ['President', 'Vice President', 'General Secretary', 'Financial Secretary', "Women's Commissioner", 'Sports Officer']
 
+const [positionOptions, setPositionOptions] = useState<string[]>(DEFAULT_POSITIONS)
 
 
 
@@ -37,6 +37,8 @@ export default function AdminCandidatesPage() {
   const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [photoRemoved, setPhotoRemoved] = useState(false)
+  const [showCustomPosition, setShowCustomPosition] = useState(false)
+  const [customPosition, setCustomPosition] = useState('')
 
  useEffect(() => {
   const supabase = createClient()
@@ -83,6 +85,8 @@ if (data) {
   setFormLevel(''); setFormSlogan('')
   setFormPhoto(null); setFormPhotoPreview(null)
    setPhotoRemoved(false)
+    setShowCustomPosition(false)  // ← add
+    setCustomPosition('')          // ← add
   setModalOpen(true)
 }
 
@@ -95,7 +99,9 @@ if (data) {
   setFormLevel(c.level)
   setFormSlogan(c.slogan)
   setFormPhoto(null)
-    setPhotoRemoved(false) 
+  setPhotoRemoved(false) 
+  setShowCustomPosition(false)  // ← add
+  setCustomPosition('')          // ← add
   setFormPhotoPreview(c.avatar_url ?? null)
   setModalOpen(true)
 }
@@ -244,9 +250,9 @@ async function doDelete() {
           {/* Filters + Search + Add */}
           <div className="admin-cand-toolbar fade-up-1">
             <div className="admin-filter-btns hide-scrollbar">
-              {FILTER_OPTIONS.map(f => (
-                <button key={f} className={`admin-filter-btn${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>{f}</button>
-              ))}
+              {['All', ...positionOptions].map(f => (
+  <button key={f} className={`admin-filter-btn${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>{f}</button>
+))}
             </div>
             <div className="admin-cand-toolbar-right">
               <div className="admin-search-wrap">
@@ -301,13 +307,90 @@ async function doDelete() {
             <label className="admin-form-label">Full Name</label>
             <input className="admin-form-input" placeholder="e.g. Kwame Asante" value={formName} onChange={e => setFormName(e.target.value)} />
           </div>
-          <div className="admin-form-field">
-            <label className="admin-form-label">Position</label>
-            <select className="admin-form-select" value={formPosition} onChange={e => setFormPosition(e.target.value)}>
-              <option value="">Select position...</option>
-              {POSITION_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
+         <div className="admin-form-field">
+  <label className="admin-form-label">Position</label>
+  {!showCustomPosition ? (
+    <>
+      <select
+        className="admin-form-select"
+        value={formPosition}
+        onChange={e => {
+          if (e.target.value === '__custom__') {
+            setShowCustomPosition(true)
+            setFormPosition('')
+          } else {
+            setFormPosition(e.target.value)
+          }
+        }}
+      >
+        <option value="">Select position...</option>
+        {positionOptions.map(p => <option key={p} value={p}>{p}</option>)}
+        <option value="__custom__">+ Add custom position...</option>
+      </select>
+    </>
+  ) : (
+    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <input
+        className="admin-form-input"
+        placeholder="e.g. Welfare Officer"
+        value={customPosition}
+        autoFocus
+        onChange={e => {
+          setCustomPosition(e.target.value)
+          setFormPosition(e.target.value)
+        }}
+        style={{ flex: 1 }}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          if (customPosition.trim() && !positionOptions.includes(customPosition.trim())) {
+            setPositionOptions([...positionOptions, customPosition.trim()])
+          }
+          setFormPosition(customPosition.trim())
+          setShowCustomPosition(false)
+        }}
+        style={{
+          padding: '8px 14px',
+          background: 'rgba(201,162,39,0.15)',
+          border: '1px solid rgba(201,162,39,0.3)',
+          borderRadius: '8px',
+          color: '#C9A227',
+          fontSize: '0.8rem',
+          fontWeight: 600,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Use This
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setShowCustomPosition(false)
+          setCustomPosition('')
+          setFormPosition('')
+        }}
+        style={{
+          padding: '8px',
+          background: 'rgba(239,68,68,0.1)',
+          border: '1px solid rgba(239,68,68,0.2)',
+          borderRadius: '8px',
+          color: '#EF4444',
+          fontSize: '0.8rem',
+          cursor: 'pointer',
+        }}
+      >
+        ✕
+      </button>
+    </div>
+  )}
+  {formPosition && (
+    <div style={{ fontSize: '0.72rem', color: '#C9A227', marginTop: '5px' }}>
+      Position: <strong>{formPosition}</strong>
+    </div>
+  )}
+</div>
           <div className="admin-form-row">
             <div className="admin-form-field">
               <label className="admin-form-label">Faculty</label>
