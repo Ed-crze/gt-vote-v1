@@ -14,13 +14,14 @@ type CandidateRow = {id: string; name: string ;position: string ;faculty: string
 
 const DEFAULT_POSITIONS = ['President', 'Vice President', 'General Secretary', 'Financial Secretary', "Women's Commissioner", 'Sports Officer']
 
-const [positionOptions, setPositionOptions] = useState<string[]>(DEFAULT_POSITIONS)
+
 
 
 
 export default function AdminCandidatesPage() {
   const { navigateTo, fadingOut } = useNavigate()
   const [candidates, setCandidates] = useState<CandidateRow[]>([])
+  const [positionOptions, setPositionOptions] = useState<string[]>(DEFAULT_POSITIONS)
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
