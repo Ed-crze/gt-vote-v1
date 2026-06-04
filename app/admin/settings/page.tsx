@@ -41,6 +41,7 @@ export default function AdminSettingsPage() {
     if (data) {
       setAllowVoting(data.is_open ?? true)
       setAnnouncement(data.announcement ?? '')
+      setEmailReceipts(data.email_receipts ?? true)
 
       if (data.start_time) {
         const start = new Date(data.start_time)

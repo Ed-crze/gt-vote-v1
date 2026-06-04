@@ -203,6 +203,9 @@ export default function BallotPage() {
       await saveReceiptToSession(receipt)
       sessionStorage.setItem('gt_receipt', receipt)
 
+    fetch('/api/send-vote-confirmation', { method: 'POST' }).catch(() => {})
+
+
       setReceiptCode(receipt)
       setReviewOpen(false)
       setSuccessVisible(true)
