@@ -30,16 +30,7 @@ const POSITION_ORDER = [
   'Sports Officer',
 ]
 
-const TAB_LABELS = ['President', 'Vice President', 'Gen. Secretary', 'Fin. Secretary', "Women's Comm.", 'Sports Officer']
 
-const SECTION_LABELS = [
-  'PRESIDENTIAL CANDIDATES',
-  'VICE PRESIDENTIAL CANDIDATES',
-  'GENERAL SECRETARY CANDIDATES',
-  'FINANCIAL SECRETARY CANDIDATES',
-  "WOMEN'S COMMISSIONER CANDIDATES",
-  'SPORTS & RECREATION OFFICER CANDIDATES',
-]
 
 function getInitials(name: string) {
   return name.split(' ').slice(0, 2).map(n => n[0]).join('')
@@ -106,8 +97,16 @@ export default function CandidatesPage() {
         .order('position')
 
       if (data && !error) {
-        // Group by position in the correct order
-        const grouped = POSITION_ORDER.map(posTitle => ({
+        // Collect every position that actually exists in the data
+        const allPositions = Array.from(new Set(data.map(c => c.position)))
+
+        // Known positions first (in defined order), then any custom ones
+        const orderedPositions = [
+          ...POSITION_ORDER.filter(p => allPositions.includes(p)),
+          ...allPositions.filter(p => !POSITION_ORDER.includes(p)),
+        ]
+
+        const grouped = orderedPositions.map(posTitle => ({
           title: posTitle,
           candidates: data
             .filter(c => c.position === posTitle)
@@ -170,25 +169,21 @@ export default function CandidatesPage() {
 
         {/* Position Tabs */}
         <div className="cand-tabs-wrap fade-up-2">
-          <div className="cand-tabs hide-scrollbar">
-            {TAB_LABELS.map((label, i) => (
+        <div className="cand-tabs hide-scrollbar">
+            {positions.map((p, i) => (
               <button
-                key={i}
+                key={p.title}
                 id={`cand-tab-${i}`}
                 className={`cand-tab${i === currentTab ? ' active' : ''}`}
                 onClick={() => setCurrentTab(i)}
               >
-                {label}
+                {p.title}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Section Label */}
-        <div className="cand-section-label fade-up-3">
-          {SECTION_LABELS[currentTab]}
-        </div>
-
+     
         {/* Candidate Cards */}
         <div className="cand-grid fade-up-3">
           {loading ? (
