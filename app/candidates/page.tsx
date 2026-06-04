@@ -53,14 +53,51 @@ export default function CandidatesPage() {
   const [positions, setPositions] = useState<PositionGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [hasVoted, setHasVoted] = useState(false)
+  const [votingOpen, setVotingOpen] = useState(true)
 
   useEffect(() => {
     const supabase = createClient()
 
     async function load() {
-      // Check if user is logged in
+     // Check if user is logged in
       const { data: { user } } = await supabase.auth.getUser()
       setIsLoggedIn(!!user)
+
+      if (user) {
+        // Has this voter already voted?
+        const { data: profile } = await supabase
+          .from('students')
+          .select('student_id')
+          .eq('id', user.id)
+          .single()
+
+        if (profile) {
+          const { hashStudentId } = await import('@/lib/auth-client')
+          const hash = await hashStudentId(profile.student_id)
+          const { data: registry } = await supabase
+            .from('voter_registry')
+            .select('has_voted')
+            .eq('student_id_hash', hash)
+            .single()
+          setHasVoted(registry?.has_voted ?? false)
+        }
+
+        // Is the election actually open? (same logic as the dashboard)
+        const { data: settings } = await supabase
+          .from('election_settings')
+          .select('is_open, end_time')
+          .eq('id', 1)
+          .single()
+
+        if (settings) {
+          const timeExpired = settings.end_time
+            ? new Date(settings.end_time).getTime() < Date.now()
+            : false
+          setVotingOpen((settings.is_open ?? false) && !timeExpired)
+        }
+      }
+
 
       // Load candidates from database
       const { data, error } = await supabase
@@ -206,15 +243,33 @@ export default function CandidatesPage() {
             ))
           )}
         </div>
-
         {/* Bottom Bar */}
         <div className="cand-bottom-bar">
-          <button
-            className="cand-proceed-btn"
-            onClick={() => navigateTo(isLoggedIn ? '/ballot' : '/login')}
-          >
-            PROCEED TO VOTE →
-          </button>
+          {!isLoggedIn ? (
+            <button className="cand-proceed-btn" onClick={() => navigateTo('/login')}>
+              SIGN IN TO VOTE →
+            </button>
+          ) : hasVoted ? (
+            <button
+              className="cand-proceed-btn"
+              disabled
+              style={{ background: 'rgba(34,197,94,0.15)', borderColor: 'rgba(34,197,94,0.3)', color: '#22C55E', cursor: 'not-allowed' }}
+            >
+              ✓ YOU HAVE ALREADY VOTED
+            </button>
+          ) : !votingOpen ? (
+            <button
+              className="cand-proceed-btn"
+              disabled
+              style={{ background: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.3)', color: '#EF4444', cursor: 'not-allowed' }}
+            >
+              VOTING IS CLOSED
+            </button>
+          ) : (
+            <button className="cand-proceed-btn" onClick={() => navigateTo('/ballot')}>
+              PROCEED TO VOTE →
+            </button>
+          )}
         </div>
 
       </div>
