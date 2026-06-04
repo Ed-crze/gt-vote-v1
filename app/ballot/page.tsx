@@ -96,8 +96,17 @@ export default function BallotPage() {
         .select('id, full_name, position, faculty, level, slogan, avatar_url')
         .order('position')
 
-      if (candidateData && !error) {
-        const grouped = POSITION_ORDER
+  if (candidateData && !error) {
+        // Collect every position that actually exists in the data
+        const allPositions = Array.from(new Set(candidateData.map(c => c.position)))
+
+        // Known positions first (in defined order), then any custom ones
+        const orderedPositions = [
+          ...POSITION_ORDER.filter(p => allPositions.includes(p)),
+          ...allPositions.filter(p => !POSITION_ORDER.includes(p)),
+        ]
+
+        const grouped = orderedPositions
           .map(posTitle => ({
             id: posTitle.toLowerCase().replace(/\s+/g, '-'),
             title: posTitle,
