@@ -55,7 +55,8 @@ export default function AdminCandidatesPage() {
   .select('id, full_name, position, faculty, level, slogan, avatar_url')
   .order('position')
 
-if (data) {
+
+ if (data) {
   setCandidates(data.map(c => ({
     id: c.id,
     name: c.full_name,
@@ -65,9 +66,13 @@ if (data) {
     slogan: c.slogan ?? '',
     avatar_url: c.avatar_url ?? null,
   })))
+
+  // Merge any custom positions already saved in the database into the options
+  const dbPositions = Array.from(new Set(data.map(c => c.position).filter(Boolean)))
+  const customOnes = dbPositions.filter(p => !DEFAULT_POSITIONS.includes(p))
+  setPositionOptions([...DEFAULT_POSITIONS, ...customOnes])
 }
   }
-
   load()
 }, [])
 
