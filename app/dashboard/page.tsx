@@ -201,7 +201,26 @@ const [votingOpen, setVotingOpen] = useState(true)
     }
   }
 
-  if (!user) return null
+  if (!user) return (
+    <div style={{
+      minHeight: '100dvh',
+      background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1628 50%, #0a0f1e 100%)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '16px',
+    }}>
+      <span className="spin" style={{
+        display: 'inline-block', width: '36px', height: '36px',
+        border: '3px solid rgba(201,162,39,0.2)',
+        borderTopColor: '#C9A227', borderRadius: '50%',
+      }} />
+      <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
+        Loading your dashboard...
+      </div>
+    </div>
+  )
 
   const navName = user.name.split(' ').slice(0, 2).join(' ')
   const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technology'
