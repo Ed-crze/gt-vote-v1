@@ -84,7 +84,7 @@ export default function HomePage() {
         {[
           { val: '3,248', lbl: 'Registered Voters', size: 'text-xl' },
           { val: '67%',   lbl: 'Turnout So Far', size: 'text-xl' },
-          { val: countdown, lbl: 'Time Left', size: 'text-sm' },
+          { val: countdown, lbl: 'Time Left', size: 'text-[clamp(0.85rem,4.2vw,1.25rem)]' },
         ].map(({ val, lbl, size }) => (
           <div key={lbl} className="rounded-2xl px-2 py-3 text-center flex flex-col items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', backdropFilter: 'blur(10px)' }}>
             <div className={`${size} font-black text-gold leading-none whitespace-nowrap tabular-nums`}>{val}</div>
