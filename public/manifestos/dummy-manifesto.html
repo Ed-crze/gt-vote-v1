@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kwame Asante — Presidential Manifesto</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Georgia', serif;
+      color: #1a1a2e;
+      background: #fff;
+      padding: 60px 72px;
+      max-width: 820px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      border-bottom: 3px solid #1B2A5E;
+      padding-bottom: 24px;
+      margin-bottom: 32px;
+    }
+    .crest {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: #1B2A5E;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #C9A227;
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      flex-shrink: 0;
+    }
+    .header-text h1 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #C9A227;
+      font-family: 'Arial', sans-serif;
+      margin-bottom: 4px;
+    }
+    .header-text h2 {
+      font-size: 22px;
+      color: #1B2A5E;
+      font-family: 'Arial', sans-serif;
+      font-weight: 900;
+    }
+    .header-text p {
+      font-size: 12px;
+      color: #666;
+      font-family: 'Arial', sans-serif;
+      margin-top: 2px;
+    }
+
+    /* Candidate Banner */
+    .banner {
+      background: linear-gradient(135deg, #1B2A5E, #0a0f1e);
+      color: #fff;
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin-bottom: 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .banner-name {
+      font-size: 28px;
+      font-weight: 900;
+      font-family: 'Arial', sans-serif;
+      margin-bottom: 4px;
+    }
+    .banner-position {
+      font-size: 13px;
+      color: #C9A227;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-family: 'Arial', sans-serif;
+    }
+    .banner-details {
+      text-align: right;
+      font-family: 'Arial', sans-serif;
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.8;
+    }
+    .banner-details strong {
+      color: #fff;
+    }
+
+    /* Slogan */
+    .slogan {
+      text-align: center;
+      font-style: italic;
+      font-size: 17px;
+      color: #1B2A5E;
+      border-left: 4px solid #C9A227;
+      padding: 12px 20px;
+      margin-bottom: 36px;
+      background: #fdf9f0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    /* Sections */
+    .section { margin-bottom: 32px; }
+    .section-title {
+      font-family: 'Arial', sans-serif;
+      font-size: 14px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #C9A227;
+      border-bottom: 1px solid #e8e0cc;
+      padding-bottom: 6px;
+      margin-bottom: 14px;
+    }
+    .section p {
+      font-size: 14px;
+      line-height: 1.85;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    .point-list {
+      list-style: none;
+      padding: 0;
+    }
+    .point-list li {
+      font-size: 14px;
+      line-height: 1.75;
+      color: #333;
+      padding: 8px 0 8px 28px;
+      border-bottom: 1px solid #f0ece2;
+      position: relative;
+    }
+    .point-list li::before {
+      content: '▸';
+      position: absolute;
+      left: 6px;
+      color: #C9A227;
+      font-size: 12px;
+      top: 10px;
+    }
+
+    /* Pillars grid */
+    .pillars {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 8px;
+    }
+    .pillar {
+      background: #f7f4ee;
+      border: 1px solid #e8e0cc;
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .pillar-num {
+      font-size: 24px;
+      font-weight: 900;
+      color: #C9A227;
+      font-family: 'Arial', sans-serif;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .pillar-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #1B2A5E;
+      font-family: 'Arial', sans-serif;
+      margin-bottom: 6px;
+    }
+    .pillar p {
+      font-size: 12.5px !important;
+      color: #555 !important;
+      margin: 0 !important;
+      line-height: 1.6 !important;
+    }
+
+    /* Closing */
+    .closing {
+      background: #1B2A5E;
+      color: #fff;
+      border-radius: 12px;
+      padding: 24px 28px;
+      text-align: center;
+      margin-top: 40px;
+    }
+    .closing p {
+      font-size: 15px;
+      font-style: italic;
+      color: rgba(255,255,255,0.85);
+      line-height: 1.7;
+      margin-bottom: 16px;
+    }
+    .closing .sig {
+      font-family: 'Georgia', cursive;
+      font-size: 20px;
+      color: #C9A227;
+    }
+    .closing .sig-label {
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      font-family: 'Arial', sans-serif;
+      margin-top: 4px;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 40px;
+      padding-top: 16px;
+      border-top: 1px solid #ddd;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'Arial', sans-serif;
+      font-size: 11px;
+      color: #aaa;
+    }
+
+    @media print {
+      body { padding: 40px 56px; }
+      .pillars { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="crest">GT</div>
+    <div class="header-text">
+      <h1>Ghana Communication Technology University</h1>
+      <h2>2025 / 2026 SRC Elections — Official Manifesto</h2>
+      <p>Student Representative Council &nbsp;·&nbsp; Academic Year 2025/2026</p>
+    </div>
+  </div>
+
+  <!-- Candidate Banner -->
+  <div class="banner">
+    <div>
+      <div class="banner-name">Kwame Asante</div>
+      <div class="banner-position">Presidential Candidate</div>
+    </div>
+    <div class="banner-details">
+      <div><strong>Faculty</strong> &nbsp; Faculty of Information Technology</div>
+      <div><strong>Level</strong> &nbsp; 400</div>
+      <div><strong>Student ID</strong> &nbsp; GCTU/IT/20/0042</div>
+    </div>
+  </div>
+
+  <!-- Slogan -->
+  <div class="slogan">
+    "A Future Built on Unity, Transparency, and Student Power."
+  </div>
+
+  <!-- Introduction -->
+  <div class="section">
+    <div class="section-title">Introduction</div>
+    <p>
+      My name is Kwame Asante, a final-year student of the Faculty of Information Technology at Ghana Communication Technology University. I am running for the position of SRC President with a clear vision: to build a student union that truly serves every student — regardless of faculty, level, or background.
+    </p>
+    <p>
+      Over the past three years, I have served as Faculty Representative, Academic Committee Member, and Peer Mentor. These roles gave me a front-row seat to the challenges our students face daily — from inadequate study spaces to delayed academic feedback. I am ready to turn those observations into action.
+    </p>
+  </div>
+
+  <!-- Key Pillars -->
+  <div class="section">
+    <div class="section-title">4 Pillars of My Agenda</div>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="pillar-num">01</div>
+        <div class="pillar-title">Academic Excellence</div>
+        <p>Advocate for better lecturer-to-student ratios, extended library hours, and a structured exam feedback system within 2 weeks of results.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-num">02</div>
+        <div class="pillar-title">Student Welfare</div>
+        <p>Establish a student welfare fund, negotiate discounted mental health services, and create a 24/7 student emergency helpline.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-num">03</div>
+        <div class="pillar-title">Infrastructure & Tech</div>
+        <p>Partner with IT faculty to improve campus Wi-Fi coverage, add more computer lab seats, and digitise the SRC complaint system.</p>
+      </div>
+      <div class="pillar">
+        <div class="pillar-num">04</div>
+        <div class="pillar-title">Transparency & Accountability</div>
+        <p>Publish monthly SRC financial reports online, hold open town halls every semester, and create an anonymous feedback portal.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Specific Promises -->
+  <div class="section">
+    <div class="section-title">100-Day Action Plan</div>
+    <ul class="point-list">
+      <li>Hold a university-wide town hall within the first 2 weeks to gather student priorities.</li>
+      <li>Launch the <strong>GCTU Student Welfare Fund</strong> with an initial seed from SRC reserves.</li>
+      <li>Negotiate with management for at least 4 additional hours of computer lab access per week.</li>
+      <li>Introduce a digital SRC complaint tracker — every complaint gets a reference number and a response within 5 working days.</li>
+      <li>Organise an inter-faculty sports day to foster unity across all departments.</li>
+      <li>Publish the first transparent SRC budget breakdown and share it with all registered students.</li>
+      <li>Establish a mentorship programme connecting final-year students with juniors in their faculty.</li>
+    </ul>
+  </div>
+
+  <!-- Why Me -->
+  <div class="section">
+    <div class="section-title">Why Vote Kwame Asante?</div>
+    <p>
+      I am not running for a title. I am running for results. Unlike promises that fade after election week, I am committing to a publicly tracked action plan. Every promise in this manifesto will have a deadline and a public status update.
+    </p>
+    <p>
+      I have the experience, the network, and — most importantly — the drive. I know what it feels like to struggle with resources on this campus, and I know what it takes to navigate administration to create real change. I am asking for your vote not just as a student leader, but as a fellow GCTU student who genuinely cares.
+    </p>
+  </div>
+
+  <!-- Closing -->
+  <div class="closing">
+    <p>
+      "Together, we can make GCTU a place where every student thrives — academically, socially, and personally. Your vote is your voice. Use it with purpose."
+    </p>
+    <div class="sig">Kwame Asante</div>
+    <div class="sig-label">Presidential Candidate &nbsp;·&nbsp; 2025/2026 SRC Elections</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>GT-Vote &nbsp;·&nbsp; GCTU E-Voting System &nbsp;·&nbsp; 2025/2026</span>
+    <span>This manifesto was submitted and verified by the Electoral Commission</span>
+  </div>
+
+</body>
+</html>

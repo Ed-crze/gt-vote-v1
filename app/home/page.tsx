@@ -22,6 +22,31 @@ export default function HomePage() {
     startAutoPlay() // reset timer on manual tap
   }
 
+  const touchStartX = useRef<number | null>(null)
+  const touchDeltaX = useRef(0)
+
+  function onTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX
+    touchDeltaX.current = 0
+  }
+
+  function onTouchMove(e: React.TouchEvent) {
+    if (touchStartX.current === null) return
+    touchDeltaX.current = e.touches[0].clientX - touchStartX.current
+  }
+
+  function onTouchEnd() {
+    if (touchStartX.current === null) return
+    const SWIPE_THRESHOLD = 50 // px
+    if (touchDeltaX.current <= -SWIPE_THRESHOLD) {
+      goToSlide((slide + 1) % 3)        // swipe left → next
+    } else if (touchDeltaX.current >= SWIPE_THRESHOLD) {
+      goToSlide((slide + 2) % 3)        // swipe right → previous
+    }
+    touchStartX.current = null
+    touchDeltaX.current = 0
+  }
+
   useEffect(() => {
     startAutoPlay()
     const tick = setInterval(() => {
@@ -110,7 +135,13 @@ export default function HomePage() {
 
       {/* Carousel */}
       <div className="flex-1 w-full flex flex-col items-center justify-center">
-        <div className="w-full overflow-hidden">
+        <div
+          className="w-full overflow-hidden"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          style={{ touchAction: 'pan-y' }}
+        >
           <div className="flex transition-transform duration-500" style={{ transform: `translateX(-${slide * 100}%)` }}>
             {slides.map((s, i) => (
               <div key={i} className="min-w-full">{s}</div>
