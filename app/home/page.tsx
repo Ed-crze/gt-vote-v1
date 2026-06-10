@@ -82,12 +82,12 @@ export default function HomePage() {
       <div className="text-xs font-bold text-gold uppercase tracking-widest mb-4">Election at a Glance</div>
       <div className="grid grid-cols-3 gap-2 w-full max-w-sm">
         {[
-          { val: '3,248', lbl: 'Registered Voters' },
-          { val: '67%',   lbl: 'Turnout So Far' },
-          { val: countdown, lbl: 'Time Left' },
-        ].map(({ val, lbl }) => (
-          <div key={lbl} className="rounded-2xl p-3 text-center" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', backdropFilter: 'blur(10px)' }}>
-            <div className="text-xl font-black text-gold leading-none">{val}</div>
+          { val: '3,248', lbl: 'Registered Voters', size: 'text-xl' },
+          { val: '67%',   lbl: 'Turnout So Far', size: 'text-xl' },
+          { val: countdown, lbl: 'Time Left', size: 'text-sm' },
+        ].map(({ val, lbl, size }) => (
+          <div key={lbl} className="rounded-2xl px-2 py-3 text-center flex flex-col items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', backdropFilter: 'blur(10px)' }}>
+            <div className={`${size} font-black text-gold leading-none whitespace-nowrap tabular-nums`}>{val}</div>
             <div className="text-[0.6rem] text-white/60 font-bold uppercase tracking-wide mt-1">{lbl}</div>
           </div>
         ))}
