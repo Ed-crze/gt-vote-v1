@@ -45,8 +45,15 @@ const [votingOpen, setVotingOpen] = useState(true)
   const supabase = createClient()
 
   async function loadUser() {
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (!authUser) { navigateTo('/login'); return }
+   try {
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+    if (authError || !authUser) {
+      // Stale / expired session — clear it and send to login
+      const { signOut } = await import('@/lib/auth-client')
+      await signOut()
+      navigateTo('/login')
+      return
+    }
 
     const { data: profile } = await supabase
       .from('students')
@@ -71,20 +78,22 @@ const [votingOpen, setVotingOpen] = useState(true)
       .single()
 
     const hasVoted = registry?.has_voted ?? false
-    let receiptCode = null
 
-    if (hasVoted) {
-      const { data: ballot } = await supabase.rpc('get_receipt_for_session')
-      receiptCode = ballot ?? null
-    }
-
+    // Render the dashboard right away — receipt is non-essential and
+    // must never block the page from showing.
     setUser({
       id: authUser.id,
       name: profile.full_name,
       faculty: profile.faculty,
       voted: hasVoted,
-      receiptCode,
+      receiptCode: null,
     })
+
+    if (hasVoted) {
+      supabase.rpc('get_receipt_for_session').then(({ data: ballot }) => {
+        if (ballot) setUser(u => u ? { ...u, receiptCode: ballot } : u)
+      })
+    }
 
     // ── Load election settings ──────────────────────────────
     const { data: settings } = await supabase
@@ -153,6 +162,16 @@ const [votingOpen, setVotingOpen] = useState(true)
 
     const params = new URLSearchParams(window.location.search)
     if (params.get('voted') === 'true') launchConfetti()
+   } catch (err) {
+    // Any unexpected failure (network, bad session, etc.) — never get
+    // stuck on the loading screen; clear the session and go to login.
+    console.error('Dashboard load failed:', err)
+    try {
+      const { signOut } = await import('@/lib/auth-client')
+      await signOut()
+    } catch {}
+    navigateTo('/login')
+   }
   }
 
   loadUser()
