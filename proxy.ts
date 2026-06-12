@@ -14,13 +14,13 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
+          // Use Supabase's own cookie options. Do NOT force httpOnly: the
+          // browser client (createBrowserClient) reads the session from
+          // these cookies via document.cookie, so making them httpOnly
+          // blinds the client to the session and leaves protected pages
+          // stuck on their loading screen.
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, {
-              ...options,
-              httpOnly: true,
-              secure: true, // always true — Vercel always uses HTTPS
-              sameSite: 'lax',
-            })
+            supabaseResponse.cookies.set(name, value, options)
           )
         }
       }
