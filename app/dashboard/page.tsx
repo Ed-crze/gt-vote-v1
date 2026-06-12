@@ -44,16 +44,39 @@ const [votingOpen, setVotingOpen] = useState(true)
   useEffect(() => {
   const supabase = createClient()
 
+  // Clears the session even when Supabase's own signOut() hangs on a
+  // corrupt token: races it against a timeout, then nukes the auth keys
+  // out of localStorage directly so the next load starts clean.
+  async function hardSignOut() {
+    try {
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise(res => setTimeout(res, 2000)),
+      ])
+    } catch {}
+    try {
+      Object.keys(window.localStorage).forEach(k => {
+        if (k.startsWith('sb-')) window.localStorage.removeItem(k)
+      })
+    } catch {}
+  }
+
   async function loadUser() {
    try {
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
-    if (authError || !authUser) {
-      // Stale / expired session — clear it and send to login
-      const { signOut } = await import('@/lib/auth-client')
-      await signOut()
+    // getUser() can hang forever in Chrome when the stored auth token is
+    // corrupt (the Web Locks API deadlocks). Race it against a timeout so
+    // a hung call can never freeze the page on the loading screen.
+    const authResult = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<'timeout'>(res => setTimeout(() => res('timeout'), 6000)),
+    ])
+
+    if (authResult === 'timeout' || authResult.error || !authResult.data?.user) {
+      await hardSignOut()
       navigateTo('/login')
       return
     }
+    const authUser = authResult.data.user
 
     const { data: profile } = await supabase
       .from('students')
@@ -62,8 +85,7 @@ const [votingOpen, setVotingOpen] = useState(true)
       .single()
 
     if (!profile) {
-      const { signOut } = await import('@/lib/auth-client')
-      await signOut()
+      await hardSignOut()
       navigateTo('/login')
       return
     }
@@ -166,10 +188,7 @@ const [votingOpen, setVotingOpen] = useState(true)
     // Any unexpected failure (network, bad session, etc.) — never get
     // stuck on the loading screen; clear the session and go to login.
     console.error('Dashboard load failed:', err)
-    try {
-      const { signOut } = await import('@/lib/auth-client')
-      await signOut()
-    } catch {}
+    await hardSignOut()
     navigateTo('/login')
    }
   }
