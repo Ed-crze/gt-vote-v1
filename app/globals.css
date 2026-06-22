@@ -1386,6 +1386,25 @@ body.fade-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none
 .admin-form-label { display: block; font-size: 0.65rem; font-weight: 700; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
 .admin-form-input { width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.07); border: 1.5px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-family: 'Inter', sans-serif; font-size: 0.82rem; outline: none; transition: all 0.2s; }
 .admin-form-input:focus { border-color: rgba(201,162,39,0.6); background: rgba(255,255,255,0.1); }
+/* Normalise native date/time inputs (iOS Safari renders them oddly on dark UI) */
+.admin-form-input[type="date"],
+.admin-form-input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 42px;
+  text-align: left;
+}
+.admin-form-input[type="date"]::-webkit-date-and-time-value,
+.admin-form-input[type="time"]::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+.admin-form-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  opacity: 0.55;
+  cursor: pointer;
+}
+.admin-form-input::-webkit-calendar-picker-indicator:hover { opacity: 0.9; }
 .admin-form-select { width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.07); border: 1.5px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; font-family: 'Inter', sans-serif; font-size: 0.82rem; outline: none; transition: all 0.2s; }
 .admin-form-select:focus { border-color: rgba(201,162,39,0.6); }
 .admin-form-select option { background: #0f1a3a; color: #fff; }
