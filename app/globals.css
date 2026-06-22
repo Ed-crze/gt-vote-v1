@@ -671,8 +671,8 @@ body.fade-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none
 .dash-lb-row.top .dash-lb-name { color: #C9A227; }
 .dash-lb-bar-bg { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
 .dash-lb-bar { height: 100%; border-radius: 2px; transition: width 1.4s ease; }
-.dash-lb-bar.gold { background: #fff; }
-.dash-lb-bar.normal { background: rgba(255,255,255,0.45); }
+.dash-lb-bar.gold { background: linear-gradient(to right, #C9A227, #f0d060); }
+.dash-lb-bar.normal { background: #fff; }
 .dash-lb-pct { font-size: 0.8rem; font-weight: 900; flex-shrink: 0; width: 38px; text-align: right; color: rgba(255,255,255,0.6); }
 .dash-lb-row.top .dash-lb-pct { color: #C9A227; }
 
@@ -1315,8 +1315,8 @@ body.fade-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none
 .admin-leading-badge { font-size: 0.55rem; background: rgba(201,162,39,0.2); border: 1px solid rgba(201,162,39,0.4); color: #C9A227; padding: 1px 6px; border-radius: 999px; font-weight: 800; }
 .admin-cand-pct { font-size: 0.68rem; color: rgba(255,255,255,0.4); font-weight: 600; }
 .admin-res-bar-bg { height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
-.admin-result-bar { height: 100%; background: rgba(255,255,255,0.45); border-radius: 3px; transition: width 1s ease; }
-.admin-result-bar.leader { background: #fff; }
+.admin-result-bar { height: 100%; background: #fff; border-radius: 3px; transition: width 1s ease; }
+.admin-result-bar.leader { background: linear-gradient(to right, #C9A227, #f0d060); }
 
 /* Faculty turnout */
 .admin-fac-card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 1rem; margin-bottom: 1.25rem; }
