@@ -40,10 +40,10 @@ export default function AdminNav() {
         </div>
         <div className="admin-nav-right">
           <button className="admin-nav-btn" onClick={handleStudentPortal}>
-            <Home size={13} /> Student Portal
+            <Home size={13} /> <span>Student Portal</span>
           </button>
           <button className="admin-nav-btn danger" onClick={handleSignOut}>
-            <LogOut size={13} /> Sign Out
+            <LogOut size={13} /> <span>Sign Out</span>
           </button>
         </div>
       </nav>
