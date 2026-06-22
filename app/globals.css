@@ -1246,7 +1246,7 @@ body.fade-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none
 .admin-nav-left { display: flex; align-items: center; gap: 10px; }
 .admin-nav-right { display: flex; align-items: center; gap: 0.5rem; }
 .admin-nav-crest { object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4)); }
-.admin-nav-title { font-size: 1rem; font-weight: 900; color: #fff; }
+.admin-nav-title { font-size: 1rem; font-weight: 900; color: #fff; white-space: nowrap; }
 .admin-nav-title span { color: #C9A227; }
 .admin-nav-badge { display: flex; align-items: center; gap: 5px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35); border-radius: 999px; padding: 3px 10px; font-size: 0.6rem; font-weight: 800; color: rgba(239,68,68,0.9); text-transform: uppercase; }
 .admin-nav-dot { width: 5px; height: 5px; border-radius: 50%; background: #EF4444; animation: dashUrgentPulse 1.5s infinite; }
@@ -1449,4 +1449,30 @@ body.fade-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none
   .admin-stats-row { grid-template-columns: 1fr 1fr; }
   .admin-actions-grid { grid-template-columns: 1fr 1fr; }
   .admin-nav-btn span { display: none; }
+
+  /* Tighter side padding so cards get more width */
+  .admin-content { padding: 1rem 1rem; }
+  .admin-nav { padding: 0.75rem 1rem; }
+  .admin-dock { padding: 0.65rem 1rem; }
+
+  /* Keep nav on one line: let the brand shrink, keep buttons compact */
+  .admin-nav-left { min-width: 0; flex-shrink: 1; }
+  .admin-nav-right { flex-shrink: 0; }
+  .admin-nav-btn { padding: 6px 8px; }
+
+  /* Smaller header + stat figures so nothing overflows its card */
+  .admin-page-hdr h1 { font-size: 1.1rem; }
+  .admin-stat-val { font-size: 1.05rem; }
+  .admin-countdown { font-size: 0.85rem; }
+
+  /* Modals: leave breathing room from screen edges */
+  .admin-modal-box { max-width: calc(100vw - 1.5rem); padding: 1.25rem; }
+}
+
+/* Very small phones */
+@media (max-width: 380px) {
+  .admin-nav-title { font-size: 0.9rem; }
+  .admin-nav-badge { padding: 2px 7px; font-size: 0.55rem; }
+  .admin-dock-btn { padding: 7px 10px; }
+  .admin-stat-val { font-size: 0.95rem; }
 }
