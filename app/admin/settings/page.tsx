@@ -42,6 +42,7 @@ export default function AdminSettingsPage() {
       setAllowVoting(data.is_open ?? true)
       setAnnouncement(data.announcement ?? '')
       setEmailReceipts(data.email_receipts ?? true)
+      setShowResults(data.show_results ?? false)
 
       if (data.start_time) {
         const start = new Date(data.start_time)
@@ -76,6 +77,7 @@ async function saveSettings() {
       announcement: announcement.trim(),
       start_time: startISO,
       end_time: endISO,
+      show_results: showResults,
     })
     .eq('id', 1)
 

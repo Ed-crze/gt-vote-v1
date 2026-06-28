@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const endRef = useRef(Date.now() + 14 * 3600 * 1000)
   const notifRef = useRef<HTMLDivElement>(null)
 const [votingOpen, setVotingOpen] = useState(true)
+  const [showResults, setShowResults] = useState(false)
 
   useEffect(() => {
   const supabase = createClient()
@@ -120,12 +121,13 @@ const [votingOpen, setVotingOpen] = useState(true)
     // ── Load election settings ──────────────────────────────
     const { data: settings } = await supabase
       .from('election_settings')
-      .select('is_open, announcement, start_time, end_time')
+      .select('is_open, announcement, start_time, end_time, show_results')
       .eq('id', 1)
       .single()
 
    if (settings) {
   if (settings.announcement) setAnnouncement(settings.announcement)
+  setShowResults(settings.show_results ?? false)
 
   if (settings.end_time) {
     endRef.current = new Date(settings.end_time).getTime()
@@ -406,6 +408,42 @@ const [votingOpen, setVotingOpen] = useState(true)
                 <div className="dash-stat-lbl">Time Left</div>
               </div>
             </div>
+
+            {/* Results Are In — shown only when voting has closed and admin published results */}
+            {!votingOpen && showResults && (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(201,162,39,0.16), rgba(27,42,94,0.35))',
+                border: '1px solid rgba(201,162,39,0.45)',
+                borderRadius: '16px',
+                padding: '1.1rem 1.25rem',
+                margin: '0 0 1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.85rem',
+              }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem', fontWeight: 900, color: '#fff', marginBottom: '4px' }}>
+                    🏁 Results Are In
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>
+                    Voting has ended. View the final results below.
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigateTo('/results')}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                    width: '100%', padding: '13px',
+                    background: '#C9A227', border: 'none', borderRadius: '11px',
+                    fontFamily: 'Inter, sans-serif', fontSize: '0.85rem', fontWeight: 900,
+                    color: '#1B2A5E', cursor: 'pointer', letterSpacing: '0.03em',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  View Final Results →
+                </button>
+              </div>
+            )}
 
             {/* Vote button */}
             <div className="dash-vote-wrap">
