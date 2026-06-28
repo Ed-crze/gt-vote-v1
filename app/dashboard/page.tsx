@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const notifRef = useRef<HTMLDivElement>(null)
 const [votingOpen, setVotingOpen] = useState(true)
   const [showResults, setShowResults] = useState(false)
+  const [showProfiles, setShowProfiles] = useState(true)
 
   useEffect(() => {
   const supabase = createClient()
@@ -121,13 +122,14 @@ const [votingOpen, setVotingOpen] = useState(true)
     // ── Load election settings ──────────────────────────────
     const { data: settings } = await supabase
       .from('election_settings')
-      .select('is_open, announcement, start_time, end_time, show_results')
+      .select('is_open, announcement, start_time, end_time, show_results, show_profiles')
       .eq('id', 1)
       .single()
 
    if (settings) {
   if (settings.announcement) setAnnouncement(settings.announcement)
   setShowResults(settings.show_results ?? false)
+  setShowProfiles(settings.show_profiles ?? true)
 
   if (settings.end_time) {
     endRef.current = new Date(settings.end_time).getTime()
@@ -471,12 +473,14 @@ const [votingOpen, setVotingOpen] = useState(true)
             </div>
           
 
-            {/* Meet the Candidates */}
-            <div className="dash-ghost-wrap">
-              <button className="dash-ghost-btn" onClick={() => navigateTo('/candidates')}>
-                <Users size={16} />Meet the Candidates
-              </button>
-            </div>
+            {/* Meet the Candidates — hidden when admin disables candidate profiles */}
+            {showProfiles && (
+              <div className="dash-ghost-wrap">
+                <button className="dash-ghost-btn" onClick={() => navigateTo('/candidates')}>
+                  <Users size={16} />Meet the Candidates
+                </button>
+              </div>
+            )}
 
             {/* Verify My Vote */}
             <div className="dash-ghost-wrap">

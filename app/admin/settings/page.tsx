@@ -43,6 +43,7 @@ export default function AdminSettingsPage() {
       setAnnouncement(data.announcement ?? '')
       setEmailReceipts(data.email_receipts ?? true)
       setShowResults(data.show_results ?? false)
+      setShowProfiles(data.show_profiles ?? true)
 
       if (data.start_time) {
         const start = new Date(data.start_time)
@@ -78,6 +79,7 @@ async function saveSettings() {
       start_time: startISO,
       end_time: endISO,
       show_results: showResults,
+      show_profiles: showProfiles,
     })
     .eq('id', 1)
 

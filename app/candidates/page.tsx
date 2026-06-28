@@ -77,9 +77,15 @@ export default function CandidatesPage() {
         // Is the election actually open? (same logic as the dashboard)
         const { data: settings } = await supabase
           .from('election_settings')
-          .select('is_open, end_time')
+          .select('is_open, end_time, show_profiles')
           .eq('id', 1)
           .single()
+
+        // Gate: if admin has hidden candidate profiles, keep students out
+        if (settings && settings.show_profiles === false) {
+          navigateTo('/dashboard')
+          return
+        }
 
         if (settings) {
           const timeExpired = settings.end_time
