@@ -9,13 +9,13 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-html { overflow-y: scroll; }
+html { overflow-y: scroll; background: #0a1437; }
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: rgba(10,18,55,0.95); }
 ::-webkit-scrollbar-thumb { background: rgba(201,162,39,0.4); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(201,162,39,0.7); }
-body { font-family: 'Inter', sans-serif; }
+body { font-family: 'Inter', sans-serif; background: #0a1437; }
 
 .text-gold { color: #C9A227; }
 .text-navy { color: #1B2A5E; }
