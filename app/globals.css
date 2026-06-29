@@ -319,6 +319,7 @@ body.fade-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none
   position: relative;
   z-index: 2;
   min-height: 100vh;
+  min-height: 100dvh; /* match the visible viewport on mobile (no 100vh overshoot) */
   overflow-x: hidden;
 }
 
