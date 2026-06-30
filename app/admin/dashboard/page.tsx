@@ -39,6 +39,7 @@ const [resultsData, setResultsData] = useState<{
 const [votingOpen, setVotingOpen] = useState(false)
 const endRef = useRef(Date.now() + 5 * 3600 * 1000)
 const [facultyTurnout, setFacultyTurnout] = useState<{ name: string; pct: number }[]>([])
+const [sendingReminder, setSendingReminder] = useState<'opening' | 'closing' | null>(null)
 
 
 useEffect(() => {
@@ -214,6 +215,29 @@ async function handleVotingToggle() {
     showToast('Failed to send announcement')
   }
 }
+  async function sendReminders(type: 'opening' | 'closing') {
+    if (sendingReminder) return // guard against double-send
+    setSendingReminder(type)
+    showToast(type === 'opening' ? 'Sending opening announcement...' : 'Reminding non-voters...')
+    try {
+      const res = await fetch('/api/send-reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        showToast(`Sent ${data.sent} of ${data.total} email${data.total === 1 ? '' : 's'}`)
+      } else {
+        showToast(data.error || 'Failed to send reminders')
+      }
+    } catch {
+      showToast('Failed to send reminders')
+    } finally {
+      setSendingReminder(null)
+    }
+  }
+
   async function handleExportPDF() {
   showToast('Generating PDF...')
   try {
@@ -311,6 +335,24 @@ async function handleVotingToggle() {
               <div className="admin-action-icon"><FileText size={22} color="#EF4444" /></div>
               <div className="admin-action-label">Export Results PDF</div>
               <div className="admin-action-sub">Full election report</div>
+            </div>
+            <div
+              className="admin-action-btn gold"
+              onClick={() => { if (!sendingReminder) sendReminders('opening') }}
+              style={{ opacity: sendingReminder ? 0.6 : 1, pointerEvents: sendingReminder ? 'none' : 'auto' }}
+            >
+              <div className="admin-action-icon"><Send size={22} color="#C9A227" /></div>
+              <div className="admin-action-label">{sendingReminder === 'opening' ? 'Sending...' : 'Send Opening Announcement'}</div>
+              <div className="admin-action-sub">Email all registered students</div>
+            </div>
+            <div
+              className="admin-action-btn green"
+              onClick={() => { if (!sendingReminder) sendReminders('closing') }}
+              style={{ opacity: sendingReminder ? 0.6 : 1, pointerEvents: sendingReminder ? 'none' : 'auto' }}
+            >
+              <div className="admin-action-icon"><Clock size={22} color="#22C55E" /></div>
+              <div className="admin-action-label">{sendingReminder === 'closing' ? 'Sending...' : 'Remind Non-Voters'}</div>
+              <div className="admin-action-sub">Email students who haven&apos;t voted</div>
             </div>
           </div>
 
