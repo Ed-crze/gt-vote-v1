@@ -227,7 +227,11 @@ async function handleVotingToggle() {
       })
       const data = await res.json()
       if (res.ok) {
-        showToast(`Sent ${data.sent} of ${data.total} email${data.total === 1 ? '' : 's'}`)
+        if (data.sent === 0 && data.firstError) {
+          showToast(`Send failed: ${data.firstError}`)
+        } else {
+          showToast(`Sent ${data.sent} of ${data.total} email${data.total === 1 ? '' : 's'}`)
+        }
       } else {
         showToast(data.error || 'Failed to send reminders')
       }

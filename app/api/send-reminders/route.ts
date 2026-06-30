@@ -132,7 +132,20 @@ export async function POST(req: NextRequest) {
       ? 'Voting is Now Open — GT-Vote'
       : '⏰ Voting Closes Soon — You Haven\'t Voted Yet'
 
+    // Verify the SMTP connection up front so an auth/config failure is
+    // reported clearly instead of silently failing every individual send.
+    try {
+      await transporter.verify()
+    } catch (e) {
+      console.error('Brevo SMTP verify failed:', e)
+      return NextResponse.json(
+        { error: `Email server rejected the connection: ${(e as Error).message}` },
+        { status: 502 },
+      )
+    }
+
     let sent = 0
+    let firstError: string | null = null
     // Individual sends keep recipient lists private; light throttle for SMTP limits.
     for (const s of recipients) {
       const html = type === 'opening'
@@ -143,11 +156,12 @@ export async function POST(req: NextRequest) {
         sent++
         if (sent % 20 === 0) await new Promise(r => setTimeout(r, 1000))
       } catch (e) {
+        if (!firstError) firstError = (e as Error).message
         console.error('reminder send failed for a recipient:', e)
       }
     }
 
-    return NextResponse.json({ sent, total: recipients.length, type })
+    return NextResponse.json({ sent, total: recipients.length, type, firstError })
   } catch (err) {
     console.error('send-reminders error:', err)
     return NextResponse.json({ error: 'Failed to send reminders' }, { status: 502 })
