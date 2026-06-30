@@ -907,7 +907,7 @@ body.fade-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none
 .verify-security-text { font-size: 0.72rem; color: rgba(255,255,255,0.5); line-height: 1.7; }
 
 /* ── CANDIDATES PAGE ── */
-.cand-page { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; padding-bottom: 90px; overflow-x: hidden; }
+.cand-page { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; padding-bottom: 130px; overflow-x: hidden; }
 .cand-page.fading-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none; }
 
 .cand-nav { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1.5px solid rgba(201,162,39,0.4); filter: drop-shadow(0 1px 6px rgba(201,162,39,0.5)); }
@@ -1135,7 +1135,7 @@ body.fade-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none
 .verify-security-text { font-size: 0.72rem; color: rgba(255,255,255,0.5); line-height: 1.7; }
 
 /* ── CANDIDATES PAGE ── */
-.cand-page { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; padding-bottom: 90px; overflow-x: hidden; }
+.cand-page { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; padding-bottom: 130px; overflow-x: hidden; }
 .cand-page.fading-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none; }
 
 .cand-nav { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1.5px solid rgba(201,162,39,0.4); filter: drop-shadow(0 1px 6px rgba(201,162,39,0.5)); }
