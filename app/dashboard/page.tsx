@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState, useRef } from 'react'
-import { Bell, User, Send, Award, BarChart2, CheckSquare, Users, Search, LogOut, ChevronDown, X, ClipboardCheck } from 'lucide-react'
+import { Bell, User, Send, Award, BarChart2, CheckSquare, Users, Search, LogOut, ChevronDown, X, ClipboardCheck, Clock } from 'lucide-react'
 import { useNavigate } from '@/lib/hooks'
 import { createClient } from '@/lib/supabase/client'
 import { signOut } from '@/lib/auth-client'
@@ -42,6 +42,30 @@ export default function DashboardPage() {
 const [votingOpen, setVotingOpen] = useState(true)
   const [showResults, setShowResults] = useState(false)
   const [showProfiles, setShowProfiles] = useState(true)
+  const [notifState, setNotifState] = useState<'none' | 'opened' | 'closing' | 'closed'>('none')
+  const [notifDismissed, setNotifDismissed] = useState(false)
+
+  // Live mirrors of state the countdown tick needs — the tick's setInterval
+  // closure is created once ([] deps) and would otherwise read stale values.
+  const votedRef = useRef(false)
+  const votingOpenRef = useRef(true)
+  const notifStateRef = useRef<'none' | 'opened' | 'closing' | 'closed'>('none')
+  const openedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => { votedRef.current = user?.voted ?? false }, [user])
+  useEffect(() => { votingOpenRef.current = votingOpen }, [votingOpen])
+  useEffect(() => { notifStateRef.current = notifState }, [notifState])
+
+  // Auto-dismiss the "voting opened" banner after 8s and remember for the session
+  useEffect(() => {
+    if (notifState === 'opened') {
+      openedTimeoutRef.current = setTimeout(() => {
+        setNotifDismissed(true)
+        sessionStorage.setItem('gt_voting_opened_shown', 'true')
+      }, 8000)
+      return () => { if (openedTimeoutRef.current) clearTimeout(openedTimeoutRef.current) }
+    }
+  }, [notifState])
 
   useEffect(() => {
   const supabase = createClient()
@@ -205,6 +229,8 @@ const [votingOpen, setVotingOpen] = useState(true)
     setCountdown('Closed')
     setUrgent(false)
     setVotingOpen(false) // ← add this line
+    // STATE 3 — voting closed; only non-voters get the banner
+    if (!votedRef.current) setNotifState('closed')
     return
   }
   const h = Math.floor(diff / 3600000)
@@ -212,6 +238,19 @@ const [votingOpen, setVotingOpen] = useState(true)
   const s = Math.floor((diff % 60000) / 1000)
   setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
   setUrgent(diff < 2 * 3600 * 1000)
+
+  // ── In-app banner state machine (reads live values via refs) ──
+  if (votingOpenRef.current) {
+    if (diff <= 3600000 && !votedRef.current) {
+      // STATE 2 — closing soon, non-voter (urgent, cannot dismiss)
+      if (notifStateRef.current !== 'closing') setNotifState('closing')
+    } else if (diff > 3600000 && notifStateRef.current === 'none') {
+      // STATE 1 — voting just opened (once per session)
+      if (sessionStorage.getItem('gt_voting_opened_shown') !== 'true') {
+        setNotifState('opened')
+      }
+    }
+  }
 }, 1000)
 
   const handleClick = (e: MouseEvent) => {
@@ -266,6 +305,9 @@ const [votingOpen, setVotingOpen] = useState(true)
 
   const navName = user.name.split(' ').slice(0, 2).join(' ')
   const faculty = user.faculty?.replace('Faculty of ', '') ?? 'Information Technology'
+  const deadlineStr = new Date(endRef.current).toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+  })
 
   const NOTIFS = [
     { icon: <Send size={13} color="#C9A227" />, text: <><strong>Voting is now open!</strong> Cast your vote before the deadline.</>, time: 'Today' },
@@ -366,6 +408,69 @@ const [votingOpen, setVotingOpen] = useState(true)
 
           {/* CONTENT */}
           <div className="dash-content">
+
+            {/* ── Automatic in-app status banner (separate from admin announcement) ── */}
+            {notifState === 'opened' && !notifDismissed && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                background: 'rgba(34,197,94,0.15)', border: '1px solid #22C55E',
+                borderRadius: '10px', padding: '11px 1.5rem', marginBottom: '1rem',
+              }}>
+                <CheckSquare size={18} color="#22C55E" style={{ flexShrink: 0 }} />
+                <span style={{ flex: 1, minWidth: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.9)', lineHeight: 1.45 }}>
+                  🗳️ Voting is now open! Cast your ballot before <strong style={{ color: '#22C55E' }}>{deadlineStr}</strong>. Your vote is anonymous and secure.
+                </span>
+                <button
+                  onClick={() => { setNotifDismissed(true); sessionStorage.setItem('gt_voting_opened_shown', 'true') }}
+                  style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', display: 'flex', flexShrink: 0, padding: 0 }}
+                  aria-label="Dismiss"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            {notifState === 'closing' && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                background: 'rgba(201,162,39,0.15)', border: '1px solid #C9A227',
+                borderRadius: '10px', padding: '11px 1.5rem', marginBottom: '1rem',
+              }}>
+                <span style={{ position: 'relative', display: 'flex', flexShrink: 0 }}>
+                  <Clock size={18} color="#C9A227" />
+                  <span style={{
+                    position: 'absolute', top: '-3px', right: '-3px', width: '7px', height: '7px',
+                    borderRadius: '50%', background: '#C9A227', animation: 'dashUrgentPulse 1.5s infinite',
+                  }} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.9)', lineHeight: 1.45 }}>
+                  ⏰ Voting closes in <strong style={{ color: '#C9A227' }}>{countdown}</strong>. You haven&apos;t voted yet — cast your ballot now before it&apos;s too late!
+                </span>
+                <button
+                  onClick={() => setShowPopup(true)}
+                  style={{
+                    flexShrink: 0, background: '#C9A227', border: 'none', borderRadius: '8px',
+                    padding: '8px 14px', fontFamily: 'Inter, sans-serif', fontSize: '0.76rem',
+                    fontWeight: 800, color: '#1B2A5E', cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  Vote Now →
+                </button>
+              </div>
+            )}
+
+            {notifState === 'closed' && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                background: 'rgba(239,68,68,0.15)', border: '1px solid #EF4444',
+                borderRadius: '10px', padding: '11px 1.5rem', marginBottom: '1rem',
+              }}>
+                <X size={18} color="#EF4444" style={{ flexShrink: 0 }} />
+                <span style={{ flex: 1, minWidth: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.9)', lineHeight: 1.45 }}>
+                  🔒 Voting has now closed. The deadline has passed and no further ballots are being accepted.
+                </span>
+              </div>
+            )}
 
             {/* Welcome card */}
             <div className="dash-welcome-card">
