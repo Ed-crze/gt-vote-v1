@@ -40,6 +40,7 @@ const [votingOpen, setVotingOpen] = useState(false)
 const endRef = useRef(Date.now() + 5 * 3600 * 1000)
 const [facultyTurnout, setFacultyTurnout] = useState<{ name: string; pct: number }[]>([])
 const [sendingReminder, setSendingReminder] = useState<'opening' | 'closing' | null>(null)
+const autoPublishedRef = useRef(false)
 
 
 useEffect(() => {
@@ -161,7 +162,14 @@ const interval = setInterval(() => {
   if (diff <= 0) {
     setCountdown('Closed')
     setVotingOpen(false)
-    // Auto-close in database if still open
+    // Auto-close in the database and publish results (once) when time expires
+    if (!autoPublishedRef.current) {
+      autoPublishedRef.current = true
+      createClient()
+        .from('election_settings')
+        .update({ is_open: false, show_results: true })
+        .eq('id', 1)
+    }
     return
   }
   const h = Math.floor(diff / 3600000)
@@ -180,14 +188,19 @@ async function handleVotingToggle() {
   const supabase = createClient()
   const newState = !votingOpen
 
+  // Closing voting also auto-publishes the final results to students.
+  const update = newState
+    ? { is_open: true }
+    : { is_open: false, show_results: true }
+
   const { error } = await supabase
     .from('election_settings')
-    .update({ is_open: newState })
+    .update(update)
     .eq('id', 1)
 
   if (!error) {
     setVotingOpen(newState)
-    showToast(newState ? 'Voting opened' : 'Voting closed')
+    showToast(newState ? 'Voting opened' : 'Voting closed — results published')
   } else {
     showToast('Failed to update voting status')
   }

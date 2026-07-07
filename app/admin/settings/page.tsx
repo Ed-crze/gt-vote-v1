@@ -100,12 +100,14 @@ async function saveSettings() {
   const supabase = createClient()
 
   if (confirmType === 'close') {
+    // Closing the election also auto-publishes results to students
     await supabase
       .from('election_settings')
-      .update({ is_open: false })
+      .update({ is_open: false, show_results: true })
       .eq('id', 1)
     setAllowVoting(false)
-    showToast('Election closed')
+    setShowResults(true)
+    showToast('Election closed — results published')
   }
 
   if (confirmType === 'reopen') {
