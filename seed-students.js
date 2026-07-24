@@ -1,5 +1,24 @@
 const { createClient } = require('@supabase/supabase-js')
-require('dotenv').config({ path: '.env.local' })
+const fs = require('fs')
+const path = require('path')
+const crypto = require('crypto')
+
+// Manually read .env.local since Next.js uses its own env loader
+const envPath = path.join(__dirname, '.env.local')
+const envFile = fs.readFileSync(envPath, 'utf8').replace(/^\uFEFF/, '') // strip BOM if present
+
+envFile.split('\n').forEach(line => {
+  const trimmed = line.trim()
+  if (!trimmed || trimmed.startsWith('#')) return
+  const eqIndex = trimmed.indexOf('=')
+  if (eqIndex === -1) return
+  const key = trimmed.slice(0, eqIndex).trim()
+  let value = trimmed.slice(eqIndex + 1).trim()
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    value = value.slice(1, -1)
+  }
+  if (!process.env[key]) process.env[key] = value
+})
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -32,10 +51,6 @@ const LAST_NAMES = [
 const TOTAL_STUDENTS = 50
 const PASSWORD = 'GtVote@2025'
 
-function randomItem(arr) {
-  return arr[Math.floor(Math.random() * arr.length)]
-}
-
 function generateStudentId(index) {
   const base = 4211230300 + index
   return base.toString()
@@ -45,6 +60,14 @@ function generateName(index) {
   const first = FIRST_NAMES[index % FIRST_NAMES.length]
   const last = LAST_NAMES[Math.floor(index / 2) % LAST_NAMES.length]
   return `${first} ${last}`
+}
+
+// ⚠️ IMPORTANT: this must match whatever hashing logic your actual signup
+// flow uses to populate student_id_hash elsewhere in your app (same
+// algorithm, same salt/pepper if any). Find that logic in your codebase
+// and replace this function's body if it differs.
+function hashStudentId(studentId) {
+  return crypto.createHash('sha256').update(studentId).digest('hex')
 }
 
 async function seedStudents() {
@@ -60,6 +83,7 @@ async function seedStudents() {
     const faculty = FACULTIES[i % FACULTIES.length]
     const level = LEVELS[i % LEVELS.length]
     const email = `${studentId}@dummy.gctu.edu.gh`
+    const studentIdHash = hashStudentId(studentId)
 
     try {
       const { data, error } = await supabase.auth.admin.createUser({
@@ -71,15 +95,15 @@ async function seedStudents() {
           full_name: fullName,
           faculty,
           level,
+          student_id_hash: studentIdHash,
         }
       })
 
       if (error) {
-        // Skip if already exists
         if (error.message?.includes('already been registered')) {
           console.log(`⚠️  Skipped ${email} — already exists`)
         } else {
-          console.error(`❌ Failed ${email}:`, error.message)
+          console.error(`❌ Failed ${email}:`, JSON.stringify(error, null, 2))
           failed++
         }
         continue
@@ -88,7 +112,6 @@ async function seedStudents() {
       created++
       console.log(`✅ ${created}/${TOTAL_STUDENTS} — ${fullName} | ${faculty} | ${email}`)
 
-      // Small delay to avoid rate limiting
       await new Promise(r => setTimeout(r, 200))
 
     } catch (err) {
