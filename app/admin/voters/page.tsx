@@ -5,7 +5,7 @@ import AdminNav from '@/components/AdminNav'
 import { useNavigate } from '@/lib/hooks'
 import { createClient } from '@/lib/supabase/client'
 
-const FACULTIES = ['All', 'Faculty of Information Technology', 'Faculty of Engineering', 'Faculty of Computing', 'Faculty of Business', 'Faculty of Applied Sci.']
+const FACULTIES = ['All', 'Faculty of Computing and Information Systems', 'Faculty of Engineering',  'Faculty of IT Business']
 
 type VoterRow = {
   id: string
