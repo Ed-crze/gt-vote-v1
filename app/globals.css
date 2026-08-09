@@ -311,7 +311,6 @@ body.fade-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none
   background-position: center;
   background-repeat: no-repeat;
   /* background-attachment: fixed;  ← removed: redundant with position:fixed and buggy on iOS WebKit */
-  transform: translateZ(0);   /* forces GPU compositing layer — prevents iOS from dropping this on toolbar animation */
   will-change: transform;
 }
 /* NOTE: dashboard uses slightly darker gradient — handled in dash-page */
@@ -321,7 +320,6 @@ body.fade-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none
   z-index: 1;
   background: linear-gradient(to bottom, rgba(10,20,55,0.72) 0%, rgba(10,20,55,0.60) 50%, rgba(10,20,55,0.82) 100%);
   pointer-events: none;
-  transform: translateZ(0);   /* same fix — keeps this layer pinned during toolbar animation */
 }
 .global-content {
   position: relative;
