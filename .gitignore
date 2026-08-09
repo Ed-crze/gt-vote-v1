@@ -1,0 +1,73 @@
+# ── Dependencies ────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Next.js ─────────────────────────────────────────────────────────
+.next/
+out/
+build/
+
+# ── Environment variables — NEVER commit these ───────────────────────
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+.env*.local
+!.env.example
+
+# ── Vercel ───────────────────────────────────────────────────────────
+.vercel
+
+# ── TypeScript ───────────────────────────────────────────────────────
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Supabase local ───────────────────────────────────────────────────
+supabase/.branches
+supabase/.temp
+supabase/migrations/*local*
+
+# ── Testing ──────────────────────────────────────────────────────────
+coverage/
+.nyc_output
+
+# ── Logs ─────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# ── OS files ─────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ── Editor ───────────────────────────────────────────────────────────
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# ── Package manager ──────────────────────────────────────────────────
+yarn.lock
+pnpm-lock.yaml
+
+# ── Misc ─────────────────────────────────────────────────────────────
+.turbo/
+dist/
+.cache/
