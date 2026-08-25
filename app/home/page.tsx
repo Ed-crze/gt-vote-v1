@@ -18,6 +18,8 @@ export default function HomePage() {
   const [slide, setSlide] = useState(0)
   const [countdown, setCountdown] = useState('--:--:--')
   const [stats, setStats] = useState<Stats | null>(null)
+  // 'loading' must not be sticky: a failed fetch has to look different from a pending one.
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
   // Counts down to start_time before the election opens, to end_time once it has.
   const targetRef = useRef<{ at: number; label: string } | null>(null)
 
@@ -64,7 +66,7 @@ export default function HomePage() {
     async function loadStats() {
       try {
         const res = await fetch('/api/stats')
-        if (!res.ok) return
+        if (!res.ok) throw new Error(`stats ${res.status}`)
         const data: Stats = await res.json()
         if (cancelled) return
 
@@ -76,8 +78,11 @@ export default function HomePage() {
           : null
 
         setStats(data)
+        setLoadState('ready')
       } catch {
-        // leave stats null — the page renders its "no data" state rather than fake numbers
+        // Show an explicit unavailable state rather than spinning on "Loading…" forever.
+        // Never fall back to invented numbers.
+        if (!cancelled) setLoadState('error')
       }
     }
     loadStats()
@@ -107,7 +112,9 @@ export default function HomePage() {
 
   const timeLabel = targetRef.current?.label ?? 'Time Left'
   const startsLater = stats?.startTime ? new Date(stats.startTime).getTime() > Date.now() : false
-  const pill = !stats ? { dot: 'bg-white/40', pulse: false, text: 'Loading…' }
+  // On error the election state is unknown — don't assert "Closed", which may be false.
+  const pill = loadState === 'error' || !stats
+    ? { dot: 'bg-white/40', pulse: false, text: loadState === 'error' ? 'Status Unavailable' : 'Loading…' }
     : stats.isOpen ? { dot: 'bg-green-400', pulse: true, text: 'Election is Live' }
     : startsLater ? { dot: 'bg-amber-400', pulse: false, text: 'Opens Soon' }
     : { dot: 'bg-white/40', pulse: false, text: 'Voting Closed' }
@@ -151,7 +158,9 @@ export default function HomePage() {
       <div className="w-full max-w-sm space-y-2.5">
         {!stats || stats.faculties.length === 0 ? (
           <div className="text-xs text-white/40 text-center py-4">
-            {stats ? 'No registrations yet' : 'Loading…'}
+            {loadState === 'error' ? 'Stats unavailable'
+              : loadState === 'loading' ? 'Loading…'
+              : 'No registrations yet'}
           </div>
         ) : stats.faculties.map((f, i) => {
           const rank = i + 1
