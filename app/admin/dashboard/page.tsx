@@ -6,14 +6,6 @@ import { createClient } from '@/lib/supabase/client'
 import { POSITIONS } from '@/lib/data'
 import { useNavigate } from '@/lib/hooks'
 
-const FACULTY_DATA = [
-  { name: 'Faculty of IT', pct: 82 },
-  { name: 'Faculty of Engineering', pct: 74 },
-  { name: 'Faculty of Computing', pct: 68 },
-  { name: 'Faculty of Business', pct: 61 },
-  { name: 'Faculty of Applied Sci.', pct: 47 },
-]
-
 export default function AdminDashboardPage() {
   const { navigateTo, fadingOut } = useNavigate()
   const [annOpen, setAnnOpen] = useState(false)
@@ -422,7 +414,11 @@ async function handleVotingToggle() {
             <TrendingUp size={14} color="#C9A227" className="verify-icon-inline" /> Faculty Turnout
           </div>
           <div className="admin-fac-card fade-up-3">
-            {(facultyTurnout.length > 0 ? facultyTurnout : FACULTY_DATA).map(f => (
+            {facultyTurnout.length === 0 ? (
+              <div className="admin-fac-row">
+                <div className="admin-fac-name">No registered students yet</div>
+              </div>
+            ) : facultyTurnout.map(f => (
               <div key={f.name} className="admin-fac-row">
                 <div className="admin-fac-name">{f.name}</div>
                 <div className="admin-fac-bar-bg">

@@ -53,11 +53,3 @@ export const POSITIONS: Position[] = [
     ],
   },
 ]
-
-export const FACULTY_LEADERBOARD = [
-  { name: 'Faculty of IT',           pct: 82, rank: 1 },
-  { name: 'Faculty of Engineering',  pct: 74, rank: 2 },
-  { name: 'Faculty of Computing',    pct: 68, rank: 3 },
-  { name: 'Faculty of Business',     pct: 55, rank: 4 },
-  { name: 'Faculty of Applied Sci.', pct: 41, rank: 5 },
-]
