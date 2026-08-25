@@ -12,7 +12,17 @@ export async function GET() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!url || !serviceKey) {
-    return NextResponse.json({ error: 'Stats unavailable.' }, { status: 500 })
+    // Names only — never values. Surfaces in the Vercel function log.
+    console.error(
+      '[api/stats] missing env:',
+      [!url && 'NEXT_PUBLIC_SUPABASE_URL', !serviceKey && 'SUPABASE_SERVICE_ROLE_KEY']
+        .filter(Boolean)
+        .join(', ')
+    )
+    return NextResponse.json(
+      { error: 'Stats unavailable.', reason: 'missing_config' },
+      { status: 500 }
+    )
   }
 
   try {
@@ -34,8 +44,13 @@ export async function GET() {
       supabase.from('students').select('faculty'),
     ])
 
-    if (registered.error || voted.error || facultyRes.error) {
-      return NextResponse.json({ error: 'Stats unavailable.' }, { status: 500 })
+    const queryError = registered.error || voted.error || facultyRes.error
+    if (queryError) {
+      console.error('[api/stats] query failed:', queryError.message)
+      return NextResponse.json(
+        { error: 'Stats unavailable.', reason: 'query_failed' },
+        { status: 500 }
+      )
     }
 
     const registeredVoters = registered.count ?? 0
@@ -79,7 +94,11 @@ export async function GET() {
       endTime,
       faculties,
     })
-  } catch {
-    return NextResponse.json({ error: 'Stats unavailable.' }, { status: 500 })
+  } catch (err) {
+    console.error('[api/stats] unexpected error:', err)
+    return NextResponse.json(
+      { error: 'Stats unavailable.', reason: 'unexpected' },
+      { status: 500 }
+    )
   }
 }
