@@ -2,13 +2,24 @@
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useNavigate } from '@/lib/hooks'
-import { FACULTY_LEADERBOARD } from '@/lib/data'
+
+type Stats = {
+  registeredVoters: number
+  votesCast: number
+  turnoutPct: number
+  isOpen: boolean
+  startTime: string | null
+  endTime: string | null
+  faculties: { name: string; count: number; pct: number }[]
+}
 
 export default function HomePage() {
   const { navigateTo, fadingOut } = useNavigate()
   const [slide, setSlide] = useState(0)
-  const [countdown, setCountdown] = useState('14:00:00')
-  const endRef = useRef(Date.now() + 14 * 3600 * 1000)
+  const [countdown, setCountdown] = useState('--:--:--')
+  const [stats, setStats] = useState<Stats | null>(null)
+  // Counts down to start_time before the election opens, to end_time once it has.
+  const targetRef = useRef<{ at: number; label: string } | null>(null)
 
   const autoRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -48,17 +59,58 @@ export default function HomePage() {
   }
 
   useEffect(() => {
+    let cancelled = false
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/stats')
+        if (!res.ok) return
+        const data: Stats = await res.json()
+        if (cancelled) return
+
+        const start = data.startTime ? new Date(data.startTime).getTime() : null
+        const end = data.endTime ? new Date(data.endTime).getTime() : null
+        targetRef.current =
+          start && start > Date.now() ? { at: start, label: 'Opens In' }
+          : end ? { at: end, label: 'Time Left' }
+          : null
+
+        setStats(data)
+      } catch {
+        // leave stats null — the page renders its "no data" state rather than fake numbers
+      }
+    }
+    loadStats()
+    // Keep turnout and the open/closed state honest for a visitor who leaves the page open.
+    const poll = setInterval(loadStats, 60000)
+
     startAutoPlay()
     const tick = setInterval(() => {
-      const diff = endRef.current - Date.now()
+      const target = targetRef.current
+      if (!target) { setCountdown('--:--:--'); return }
+      const diff = target.at - Date.now()
       if (diff <= 0) { setCountdown('Closed'); return }
-      const h = Math.floor(diff / 3600000)
+      const d = Math.floor(diff / 86400000)
+      const h = Math.floor((diff % 86400000) / 3600000)
       const m = Math.floor((diff % 3600000) / 60000)
       const s = Math.floor((diff % 60000) / 1000)
-      setCountdown(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`)
+      const hms = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+      setCountdown(d > 0 ? `${d}d ${hms}` : hms)
     }, 1000)
-    return () => { if (autoRef.current) clearInterval(autoRef.current); clearInterval(tick) }
+    return () => {
+      cancelled = true
+      if (autoRef.current) clearInterval(autoRef.current)
+      clearInterval(tick)
+      clearInterval(poll)
+    }
   }, [])
+
+  const timeLabel = targetRef.current?.label ?? 'Time Left'
+  const startsLater = stats?.startTime ? new Date(stats.startTime).getTime() > Date.now() : false
+  const pill = !stats ? { dot: 'bg-white/40', pulse: false, text: 'Loading…' }
+    : stats.isOpen ? { dot: 'bg-green-400', pulse: true, text: 'Election is Live' }
+    : startsLater ? { dot: 'bg-amber-400', pulse: false, text: 'Opens Soon' }
+    : { dot: 'bg-white/40', pulse: false, text: 'Voting Closed' }
 
   const slides = [
     <div key="hero" className="flex flex-col items-center justify-center text-center px-6 py-8">
@@ -82,9 +134,9 @@ export default function HomePage() {
       <div className="text-xs font-bold text-gold uppercase tracking-widest mb-4">Election at a Glance</div>
       <div className="grid grid-cols-3 gap-2 w-full max-w-sm">
         {[
-          { val: '3,248', lbl: 'Registered Voters', size: 'text-xl' },
-          { val: '67%',   lbl: 'Turnout So Far', size: 'text-xl' },
-          { val: countdown, lbl: 'Time Left', size: 'text-[clamp(0.85rem,4.2vw,1.25rem)]' },
+          { val: stats ? stats.registeredVoters.toLocaleString() : '—', lbl: 'Registered Voters', size: 'text-xl' },
+          { val: stats ? `${stats.turnoutPct}%` : '—',                  lbl: 'Turnout So Far', size: 'text-xl' },
+          { val: countdown, lbl: timeLabel, size: 'text-[clamp(0.85rem,4.2vw,1.25rem)]' },
         ].map(({ val, lbl, size }) => (
           <div key={lbl} className="rounded-2xl px-2 py-3 text-center flex flex-col items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', backdropFilter: 'blur(10px)' }}>
             <div className={`${size} font-black text-gold leading-none whitespace-nowrap tabular-nums`}>{val}</div>
@@ -95,22 +147,29 @@ export default function HomePage() {
     </div>,
 
     <div key="lb" className="flex flex-col items-center justify-center px-6 py-8 w-full">
-      <div className="text-xs font-bold text-gold uppercase tracking-widest mb-4">Faculty Leaderboard</div>
+      <div className="text-xs font-bold text-gold uppercase tracking-widest mb-4">Registrations by Faculty</div>
       <div className="w-full max-w-sm space-y-2.5">
-        {FACULTY_LEADERBOARD.map((f) => (
-          <div key={f.name} className="flex items-center gap-2.5">
-            <div className={`w-5 text-center text-xs font-black ${f.rank === 1 ? 'text-gold' : f.rank === 2 ? 'text-gray-400' : f.rank === 3 ? 'text-amber-600' : 'text-white/30'}`}>
-              {f.rank}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className={`text-xs font-bold mb-1 ${f.rank === 1 ? 'text-gold' : 'text-white'}`}>{f.name}</div>
-              <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
-                <div className="h-full rounded-full" style={{ width: `${f.pct}%`, background: f.rank === 1 ? 'linear-gradient(to right, #C9A227, #f0d060)' : 'linear-gradient(to right, #4a6fa5, #7eb8f7)' }} />
-              </div>
-            </div>
-            <div className={`text-xs font-black w-9 text-right ${f.rank === 1 ? 'text-gold' : 'text-white/60'}`}>{f.pct}%</div>
+        {!stats || stats.faculties.length === 0 ? (
+          <div className="text-xs text-white/40 text-center py-4">
+            {stats ? 'No registrations yet' : 'Loading…'}
           </div>
-        ))}
+        ) : stats.faculties.map((f, i) => {
+          const rank = i + 1
+          return (
+            <div key={f.name} className="flex items-center gap-2.5">
+              <div className={`w-5 text-center text-xs font-black ${rank === 1 ? 'text-gold' : rank === 2 ? 'text-gray-400' : rank === 3 ? 'text-amber-600' : 'text-white/30'}`}>
+                {rank}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className={`text-xs font-bold mb-1 truncate ${rank === 1 ? 'text-gold' : 'text-white'}`}>{f.name}</div>
+                <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                  <div className="h-full rounded-full" style={{ width: `${f.pct}%`, background: rank === 1 ? 'linear-gradient(to right, #C9A227, #f0d060)' : 'linear-gradient(to right, #4a6fa5, #7eb8f7)' }} />
+                </div>
+              </div>
+              <div className={`text-xs font-black w-9 text-right ${rank === 1 ? 'text-gold' : 'text-white/60'}`}>{f.pct}%</div>
+            </div>
+          )
+        })}
       </div>
     </div>,
   ]
@@ -128,8 +187,8 @@ export default function HomePage() {
           </div>
         </div>
         <div className="mt-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white" style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)' }}>
-          <span className="w-2 h-2 rounded-full bg-green-400 live-dot" />
-          Election is Live
+          <span className={`w-2 h-2 rounded-full ${pill.dot} ${pill.pulse ? 'live-dot' : ''}`} />
+          {pill.text}
         </div>
       </div>
 
