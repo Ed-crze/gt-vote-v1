@@ -305,18 +305,26 @@ body.fade-out { animation: pageFadeOut 0.35s ease forwards; pointer-events: none
 .global-bg {
   position: fixed;
   inset: 0;
+  /* iOS sizes `inset:0` against the SMALL viewport (address bar expanded) and never
+     grows it, while the content below uses 100dvh. Pin to the LARGE viewport instead
+     so the layer always covers; the overhang bleeds off-screen behind the toolbar. */
+  height: 100vh;
+  height: 100lvh;
   z-index: 0;
   background-image: url('/campus-bg.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   /* background-attachment: fixed;  ← removed: redundant with position:fixed and buggy on iOS WebKit */
-  will-change: transform;
+  /* will-change: transform;  ← removed: promoted layers aren't reliably re-rastered on
+     viewport resize in WebKit, and nothing here animates */
 }
 /* NOTE: dashboard uses slightly darker gradient — handled in dash-page */
 .global-overlay {
   position: fixed;
   inset: 0;
+  height: 100vh;
+  height: 100lvh;
   z-index: 1;
   background: linear-gradient(to bottom, rgba(10,20,55,0.72) 0%, rgba(10,20,55,0.60) 50%, rgba(10,20,55,0.82) 100%);
   pointer-events: none;
