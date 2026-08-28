@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { loginStudent } from '@/lib/auth-client'
 import { createClient } from '@/lib/supabase/client'
 import { useNavigate } from '@/lib/hooks'
+import { markSessionActive } from '@/lib/useInactivityTimeout'
 
 function EyeIcon({ closed }: { closed?: boolean }) {
   if (closed) return (
@@ -165,6 +166,11 @@ const [pendingProfile, setPendingProfile] = useState<{ name: string; faculty: st
       triggerShake()
       return
     }
+
+    // First point at which the session is definitively established. SessionGuard
+    // fails closed on a missing timestamp, so this has to be written before the
+    // navigation below or a fresh login would be signed straight back out.
+    markSessionActive()
 
     setSuccess(pendingProfile)
     setStep('success')

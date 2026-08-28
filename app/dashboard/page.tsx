@@ -4,6 +4,7 @@ import { Bell, User, Send, Award, BarChart2, CheckSquare, Users, Search, LogOut,
 import { useNavigate } from '@/lib/hooks'
 import { createClient } from '@/lib/supabase/client'
 import { signOut } from '@/lib/auth-client'
+import { clearSessionActivity } from '@/lib/useInactivityTimeout'
 import PageBackground from '@/components/PageBackground'
 
 export default function DashboardPage() {
@@ -266,6 +267,7 @@ const [votingOpen, setVotingOpen] = useState(true)
 }, [])
 
   const doLogout = async () => {
+    clearSessionActivity()
     await signOut()
     navigateTo('/home')
   }

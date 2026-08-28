@@ -22,14 +22,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disableTransitionOnChange
           storageKey="gtvote-theme"
         >
-          {/* Inactivity timeout. Skips public routes internally; the layout never
-              unmounts, so the countdown survives page transitions. */}
-          <SessionGuard />
           {/* Background stays mounted across all page navigations — never flashes */}
           <div className="global-bg" />
           <div className="global-overlay" />
           <div className="global-content">
-            {children}
+            {/* Inactivity timeout. Skips public routes internally; the layout
+                never unmounts, so the countdown survives page transitions. It
+                wraps children so protected content can be held back until the
+                stale-session check resolves. */}
+            <SessionGuard>{children}</SessionGuard>
           </div>
         </ThemeProvider>
       </body>

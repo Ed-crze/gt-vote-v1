@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import { BarChart2, Users, Settings, Award, LogOut, Home } from 'lucide-react'
 import { useNavigate } from '@/lib/hooks'
 import { signOut } from '@/lib/auth-client'
+import { clearSessionActivity } from '@/lib/useInactivityTimeout'
 
 export default function AdminNav() {
   const { navigateTo } = useNavigate()
@@ -18,9 +19,11 @@ export default function AdminNav() {
 
   function handleSignOut() {
     sessionStorage.removeItem('admin_auth')
+    clearSessionActivity()
     navigateTo('/admin')
   }
    async function handleStudentPortal() {
+    clearSessionActivity()
     await signOut()
     navigateTo('/login')
   }

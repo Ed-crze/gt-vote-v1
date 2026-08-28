@@ -26,22 +26,63 @@ const ACTIVITY_KEY = 'gtvote-last-activity'
 const THROTTLE_MS = 1000
 const TICK_MS = 1000
 
-function readSharedActivity(): number | null {
+/**
+ * Why these are distinct rather than one nullable number: `missing` and
+ * `unparseable` mean storage works and we simply have no usable value, whereas
+ * `unavailable` means we cannot read OR write and no timestamp we record will
+ * ever survive. They currently lead to the same fail-closed outcome, but they
+ * are very different failures to be looking at in a bug report.
+ */
+export type ActivityRead =
+  | { status: 'ok'; timestamp: number }
+  | { status: 'missing' }
+  | { status: 'unparseable'; raw: string }
+  | { status: 'unavailable'; error: unknown }
+
+export function readSharedActivity(): ActivityRead {
+  let raw: string | null
   try {
-    const raw = window.localStorage.getItem(ACTIVITY_KEY)
-    if (!raw) return null
-    const parsed = Number(raw)
-    return Number.isFinite(parsed) ? parsed : null
-  } catch {
-    // Safari private mode and blocked site data both throw here. Degrade to a
-    // per-tab timer rather than breaking the guard entirely.
-    return null
+    raw = window.localStorage.getItem(ACTIVITY_KEY)
+  } catch (error) {
+    // Safari private mode and blocked site data both throw here.
+    return { status: 'unavailable', error }
   }
+  if (raw === null) return { status: 'missing' }
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return { status: 'unparseable', raw }
+  return { status: 'ok', timestamp: parsed }
+}
+
+/** Timestamp-or-null view, for the running timer's hot path. */
+function readSharedActivityMs(): number | null {
+  const read = readSharedActivity()
+  return read.status === 'ok' ? read.timestamp : null
 }
 
 function writeSharedActivity(timestamp: number) {
   try {
     window.localStorage.setItem(ACTIVITY_KEY, String(timestamp))
+  } catch {
+    /* see readSharedActivity */
+  }
+}
+
+/**
+ * Record activity from outside the hook. Called at the moment a session is
+ * established so a fresh login always has a timestamp before SessionGuard
+ * evaluates one.
+ */
+export function markSessionActive(timestamp: number = Date.now()) {
+  writeSharedActivity(timestamp)
+}
+
+/**
+ * Drop the shared timestamp on explicit sign-out, so the next login starts
+ * clean instead of inheriting whatever the previous user left behind.
+ */
+export function clearSessionActivity() {
+  try {
+    window.localStorage.removeItem(ACTIVITY_KEY)
   } catch {
     /* see readSharedActivity */
   }
@@ -124,7 +165,7 @@ export function useInactivityTimeout({
 
       // Wall-clock, not accumulated ticks: a throttled background tab or a
       // laptop that slept through the whole window still resolves correctly.
-      const shared = readSharedActivity()
+      const shared = readSharedActivityMs()
       const last = shared !== null ? Math.max(shared, lastActivityRef.current) : lastActivityRef.current
       lastActivityRef.current = last
 

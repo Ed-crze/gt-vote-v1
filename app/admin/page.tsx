@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { Lock, Shield, Eye, EyeOff } from 'lucide-react'
 import { useNavigate } from '@/lib/hooks'
 import { createClient } from '@/lib/supabase/client'
+import { markSessionActive } from '@/lib/useInactivityTimeout'
 
 export default function AdminLoginPage() {
   const { navigateTo, fadingOut } = useNavigate()
@@ -83,6 +84,9 @@ export default function AdminLoginPage() {
 
     setSuccess(true)
     sessionStorage.setItem('admin_auth', 'true')
+    // After the role check, not after signInWithPassword: the non-admin branch
+    // above revokes the session, and a timestamp written earlier would outlive it.
+    markSessionActive()
     setTimeout(() => navigateTo('/admin/dashboard'), 800)
 
   } catch {
