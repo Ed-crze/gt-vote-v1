@@ -59,7 +59,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-4 py-8 gap-3 ${fadingOut ? 'content-fade-out' : 'content-fade-in'}`}>
+    <div className={`min-h-[100dvh] flex flex-col items-center justify-center p-4 py-8 gap-3 ${fadingOut ? 'content-fade-out' : 'content-fade-in'}`}>
 
       {/* Back button */}
       <div className="w-full flex justify-end" style={{ maxWidth: '380px' }}>

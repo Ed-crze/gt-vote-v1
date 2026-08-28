@@ -224,7 +224,7 @@ async function handleResend() {
 }
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-4 gap-3 ${fadingOut ? 'content-fade-out' : 'content-fade-in'}`}>
+    <div className={`min-h-[100dvh] flex flex-col items-center justify-center p-4 gap-3 ${fadingOut ? 'content-fade-out' : 'content-fade-in'}`}>
       {/* Back button */}
       <div className="w-full flex justify-end" style={{ maxWidth: '360px' }}>
         <button onClick={() => router.back()} className="back-btn">
@@ -413,7 +413,7 @@ async function handleResend() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-[100dvh] flex items-center justify-center">
         <span className="spin" style={{
           display: 'inline-block', width: '24px', height: '24px',
           border: '3px solid rgba(0,0,0,0.1)', borderTopColor: '#1B2A5E', borderRadius: '50%'

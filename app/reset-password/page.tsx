@@ -101,7 +101,7 @@ export default function ResetPasswordPage() {
   if (!sessionReady) {
     return (
       <PageBackground fadingOut={false}>
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-[100dvh] flex items-center justify-center">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
             <Image src="/gctu-crest.png" alt="GCTU" width={56} height={56} className="object-contain" loading="eager" priority />
             <span className="spin" style={{
@@ -118,7 +118,7 @@ export default function ResetPasswordPage() {
   if (success) {
     return (
       <PageBackground fadingOut={false}>
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-3 content-fade-in">
+        <div className="min-h-[100dvh] flex flex-col items-center justify-center p-4 gap-3 content-fade-in">
           <div className="bg-white overflow-hidden login-card">
             <div className="flex items-center gap-3 px-5 py-4 login-card-header">
               <Image src="/gctu-crest.png" alt="GCTU" width={54} height={54} className="object-contain flex-shrink-0" loading="eager" priority />
@@ -144,7 +144,7 @@ export default function ResetPasswordPage() {
 
   return (
     <PageBackground fadingOut={false}>
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 py-8 gap-3 content-fade-in">
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center p-4 py-8 gap-3 content-fade-in">
 
         {/* Back button */}
         <div className="w-full flex justify-end" style={{ maxWidth: '380px' }}>

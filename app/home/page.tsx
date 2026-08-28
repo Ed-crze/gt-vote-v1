@@ -184,7 +184,7 @@ export default function HomePage() {
   ]
 
   return (
-    <div className={`min-h-screen min-h-[100dvh] flex flex-col items-center justify-between py-10 px-6 ${fadingOut ? 'content-fade-out' : 'content-fade-in'}`}>
+    <div className={`min-h-[100dvh] flex flex-col items-center justify-between py-10 px-6 ${fadingOut ? 'content-fade-out' : 'content-fade-in'}`}>
 
       {/* Top */}
       <div className="w-full flex flex-col items-center">
