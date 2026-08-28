@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { ThemeProvider } from "@/components/theme-provider";
+import SessionGuard from "@/components/SessionGuard";
 
 export const metadata: Metadata = {
   title: 'GT-Vote — GCTU E-Voting System',
@@ -21,6 +22,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disableTransitionOnChange
           storageKey="gtvote-theme"
         >
+          {/* Inactivity timeout. Skips public routes internally; the layout never
+              unmounts, so the countdown survives page transitions. */}
+          <SessionGuard />
           {/* Background stays mounted across all page navigations — never flashes */}
           <div className="global-bg" />
           <div className="global-overlay" />
