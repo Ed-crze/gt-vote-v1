@@ -31,14 +31,10 @@ function isPublicRoute(pathname: string) {
   return PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(`${p}/`))
 }
 
-// ⚠️ TESTING VALUES — restore to 30min/2min (student) and 15min/1min (admin)
-// before deployment.
-//   PRODUCTION:  STUDENT_TIMEOUT_MS = 30 * 60 * 1000   STUDENT_WARNING_MS = 2 * 60 * 1000
-//                ADMIN_TIMEOUT_MS   = 15 * 60 * 1000   ADMIN_WARNING_MS   = 60 * 1000
-const STUDENT_TIMEOUT_MS = 60 * 1000
-const STUDENT_WARNING_MS = 20 * 1000
-const ADMIN_TIMEOUT_MS = 45 * 1000
-const ADMIN_WARNING_MS = 15 * 1000
+const STUDENT_TIMEOUT_MS = 30 * 60 * 1000
+const STUDENT_WARNING_MS = 2 * 60 * 1000
+const ADMIN_TIMEOUT_MS = 15 * 60 * 1000
+const ADMIN_WARNING_MS = 60 * 1000
 
 type Role = 'unknown' | 'none' | 'student' | 'admin'
 
