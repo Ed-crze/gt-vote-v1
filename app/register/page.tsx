@@ -249,7 +249,7 @@ async function handleResend() {
             <h1 className="register-title">
               Create your <span className="register-title-accent">GT-Vote</span> Account
             </h1>
-            <p className="register-subtitle">For L100, L200 and Graduate Students</p>
+            <p className="register-subtitle">For Students who have not registered </p>
 
             {/* Info note */}
             <div className="register-info-note">
