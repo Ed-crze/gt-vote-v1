@@ -40,7 +40,7 @@ export default function DashboardPage() {
   const [turnoutOffset, setTurnoutOffset] = useState(163.36)
   const endRef = useRef(Date.now() + 14 * 3600 * 1000)
   const notifRef = useRef<HTMLDivElement>(null)
-const [votingOpen, setVotingOpen] = useState(true)
+  const [votingOpen, setVotingOpen] = useState(true)
   const [showResults, setShowResults] = useState(false)
   const [showProfiles, setShowProfiles] = useState(true)
   const [notifState, setNotifState] = useState<'none' | 'opened' | 'closing' | 'closed'>('none')
@@ -69,202 +69,185 @@ const [votingOpen, setVotingOpen] = useState(true)
   }, [notifState])
 
   useEffect(() => {
-  const supabase = createClient()
+    const supabase = createClient()
 
-  // Clears the session even when Supabase's own signOut() hangs on a
-  // corrupt token: races it against a timeout, then nukes the auth keys
-  // out of localStorage directly so the next load starts clean.
-  async function hardSignOut() {
-    try {
-      await Promise.race([
-        supabase.auth.signOut(),
-        new Promise(res => setTimeout(res, 2000)),
-      ])
-    } catch {}
-    try {
-      Object.keys(window.localStorage).forEach(k => {
-        if (k.startsWith('sb-')) window.localStorage.removeItem(k)
-      })
-    } catch {}
-  }
-
-  async function loadUser() {
-   try {
-    // getUser() can hang forever in Chrome when the stored auth token is
-    // corrupt (the Web Locks API deadlocks). Race it against a timeout so
-    // a hung call can never freeze the page on the loading screen.
-    const authResult = await Promise.race([
-      supabase.auth.getUser(),
-      new Promise<'timeout'>(res => setTimeout(() => res('timeout'), 6000)),
-    ])
-
-    if (authResult === 'timeout' || authResult.error || !authResult.data?.user) {
-      await hardSignOut()
-      navigateTo('/login')
-      return
-    }
-    const authUser = authResult.data.user
-
-    const { data: profile } = await supabase
-      .from('students')
-      .select('full_name, faculty, student_id')
-      .eq('id', authUser.id)
-      .single()
-
-    if (!profile) {
-      await hardSignOut()
-      navigateTo('/login')
-      return
+    // Clears the session even when Supabase's own signOut() hangs on a
+    // corrupt token: races it against a timeout, then nukes the auth keys
+    // out of localStorage directly so the next load starts clean.
+    async function hardSignOut() {
+      try {
+        await Promise.race([
+          supabase.auth.signOut(),
+          new Promise(res => setTimeout(res, 2000)),
+        ])
+      } catch {}
+      try {
+        Object.keys(window.localStorage).forEach(k => {
+          if (k.startsWith('sb-')) window.localStorage.removeItem(k)
+        })
+      } catch {}
     }
 
-    const { hashStudentId } = await import('@/lib/auth-client')
-    const hash = await hashStudentId(profile.student_id)
+    async function loadUser() {
+      try {
+        // getUser() can hang forever in Chrome when the stored auth token is
+        // corrupt (the Web Locks API deadlocks). Race it against a timeout so
+        // a hung call can never freeze the page on the loading screen.
+        const authResult = await Promise.race([
+          supabase.auth.getUser(),
+          new Promise<'timeout'>(res => setTimeout(() => res('timeout'), 6000)),
+        ])
 
-    const { data: registry } = await supabase
-      .from('voter_registry')
-      .select('has_voted')
-      .eq('student_id_hash', hash)
-      .single()
-
-    const hasVoted = registry?.has_voted ?? false
-
-    // Render the dashboard right away — receipt is non-essential and
-    // must never block the page from showing.
-    setUser({
-      id: authUser.id,
-      name: profile.full_name,
-      faculty: profile.faculty,
-      voted: hasVoted,
-      receiptCode: null,
-    })
-
-    if (hasVoted) {
-      supabase.rpc('get_receipt_for_session').then(({ data: ballot }) => {
-        if (ballot) setUser(u => u ? { ...u, receiptCode: ballot } : u)
-      })
-    }
-
-    // ── Load election settings ──────────────────────────────
-    const { data: settings } = await supabase
-      .from('election_settings')
-      .select('is_open, announcement, start_time, end_time, show_results, show_profiles')
-      .eq('id', 1)
-      .single()
-
-   if (settings) {
-  if (settings.announcement) setAnnouncement(settings.announcement)
-  setShowResults(settings.show_results ?? false)
-  setShowProfiles(settings.show_profiles ?? true)
-
-  if (settings.end_time) {
-    endRef.current = new Date(settings.end_time).getTime()
-    const timeExpired = new Date(settings.end_time).getTime() < Date.now()
-    // Open only if admin enabled it AND time hasn't expired
-    setVotingOpen((settings.is_open ?? false) && !timeExpired)
-    if (timeExpired) setCountdown('Closed')
-  } else {
-    setVotingOpen(settings.is_open ?? false)
-  }
-}
-
-    // ── Load real turnout data ──────────────────────────────
-    const { data: facultyData } = await supabase
-      .from('students')
-      .select('faculty')
-
-    const { data: registryData } = await supabase
-      .from('voter_registry')
-      .select('has_voted')
-
-    if (facultyData && registryData) {
-      const totalReg = facultyData.length
-      const rawVotes = registryData.filter(r => r.has_voted).length
-      const totalVotes = Math.min(rawVotes, totalReg)
-      const pct = totalReg > 0
-        ? Math.min(Math.round((totalVotes / totalReg) * 100), 100)
-        : 0
-
-      const facultyCounts: Record<string, number> = {}
-      facultyData.forEach(s => {
-        if (s.faculty) {
-          facultyCounts[s.faculty] = (facultyCounts[s.faculty] || 0) + 1
+        if (authResult === 'timeout' || authResult.error || !authResult.data?.user) {
+          await hardSignOut()
+          navigateTo('/login')
+          return
         }
-      })
+        const authUser = authResult.data.user
 
-      const sorted = Object.entries(facultyCounts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count], i) => ({
-          name: name.replace('Faculty of ', ''),
-          pct,
-          total: count,
-          rank: i + 1,
-        }))
+        const { data: profile } = await supabase
+          .from('students')
+          .select('full_name, faculty, student_id')
+          .eq('id', authUser.id)
+          .single()
 
-      setLeaderboard(sorted)
-      setTotalRegistered(totalReg)
-      setTurnoutPct(pct)
+        if (!profile) {
+          await hardSignOut()
+          navigateTo('/login')
+          return
+        }
 
-      setTimeout(() => {
-        setBarWidths(sorted.map(() => pct))
-        const circumference = 163.36
-        setTurnoutOffset(circumference - (pct / 100) * circumference)
-      }, 400)
-    }
+        // ── Check voted status via secure function ──────────────────────
+        // voter_registry is no longer directly readable after the corrective
+        // migration (§9 RLS fix). has_current_user_voted() is a security
+        // definer function that derives the hash server-side from auth.uid()
+        // and never exposes the registry to the client.
+        const { data: votedStatus } = await supabase
+          .rpc('has_current_user_voted')
 
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('voted') === 'true') launchConfetti()
-   } catch (err) {
-    // Any unexpected failure (network, bad session, etc.) — never get
-    // stuck on the loading screen; clear the session and go to login.
-    console.error('Dashboard load failed:', err)
-    await hardSignOut()
-    navigateTo('/login')
-   }
-  }
+        const hasVoted = votedStatus ?? false
 
-  loadUser()
-  // Countdown timer — reads from endRef which is now set from database
- const tick = setInterval(() => {
-  const diff = endRef.current - Date.now()
-  if (diff <= 0) {
-    setCountdown('Closed')
-    setUrgent(false)
-    setVotingOpen(false) // ← add this line
-    // STATE 3 — voting closed; only non-voters get the banner
-    if (!votedRef.current) setNotifState('closed')
-    return
-  }
-  const h = Math.floor(diff / 3600000)
-  const m = Math.floor((diff % 3600000) / 60000)
-  const s = Math.floor((diff % 60000) / 1000)
-  setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
-  setUrgent(diff < 2 * 3600 * 1000)
+        setUser({
+          id: authUser.id,
+          name: profile.full_name,
+          faculty: profile.faculty,
+          voted: hasVoted,
+          receiptCode: null,
+        })
 
-  // ── In-app banner state machine (reads live values via refs) ──
-  if (votingOpenRef.current) {
-    if (diff <= 3600000 && !votedRef.current) {
-      // STATE 2 — closing soon, non-voter (urgent, cannot dismiss)
-      if (notifStateRef.current !== 'closing') setNotifState('closing')
-    } else if (diff > 3600000 && notifStateRef.current === 'none') {
-      // STATE 1 — voting just opened (once per session)
-      if (sessionStorage.getItem('gt_voting_opened_shown') !== 'true') {
-        setNotifState('opened')
+        // ── Load election settings ──────────────────────────────────────
+        const { data: settings } = await supabase
+          .from('election_settings')
+          .select('is_open, announcement, start_time, end_time, show_results, show_profiles')
+          .eq('id', 1)
+          .single()
+
+        if (settings) {
+          if (settings.announcement) setAnnouncement(settings.announcement)
+          setShowResults(settings.show_results ?? false)
+          setShowProfiles(settings.show_profiles ?? true)
+
+          if (settings.end_time) {
+            endRef.current = new Date(settings.end_time).getTime()
+            const timeExpired = new Date(settings.end_time).getTime() < Date.now()
+            // Open only if admin enabled it AND time hasn't expired
+            setVotingOpen((settings.is_open ?? false) && !timeExpired)
+            if (timeExpired) setCountdown('Closed')
+          } else {
+            setVotingOpen(settings.is_open ?? false)
+          }
+        }
+
+        // ── Load turnout via secure aggregate functions ─────────────────
+        // voter_registry and students are no longer directly readable after
+        // the corrective migration (§8 and §9). get_overall_turnout() and
+        // get_faculty_turnout() are security definer functions that return
+        // only aggregates — no individual ballot or identity data is exposed.
+        const { data: turnout } = await supabase
+          .rpc('get_overall_turnout')
+
+        const { data: facultyTurnout } = await supabase
+          .rpc('get_faculty_turnout')
+
+        if (turnout?.[0]) {
+          const totalReg = Number(turnout[0].registered)
+          const pct = Number(turnout[0].turnout_pct)
+
+          const sorted = (facultyTurnout ?? [])
+            .sort((a: any, b: any) => b.registered - a.registered)
+            .map((f: any, i: number) => ({
+              name: String(f.faculty).replace('Faculty of ', ''),
+              pct,
+              total: Number(f.registered),
+              rank: i + 1,
+            }))
+
+          setLeaderboard(sorted)
+          setTotalRegistered(totalReg)
+          setTurnoutPct(pct)
+
+          setTimeout(() => {
+            setBarWidths(sorted.map(() => pct))
+            const circumference = 163.36
+            setTurnoutOffset(circumference - (pct / 100) * circumference)
+          }, 400)
+        }
+
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('voted') === 'true') launchConfetti()
+      } catch (err) {
+        // Any unexpected failure (network, bad session, etc.) — never get
+        // stuck on the loading screen; clear the session and go to login.
+        console.error('Dashboard load failed:', err)
+        await hardSignOut()
+        navigateTo('/login')
       }
     }
-  }
-}, 1000)
 
-  const handleClick = (e: MouseEvent) => {
-    if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-      setShowNotif(false)
+    loadUser()
+
+    // Countdown timer — reads from endRef which is now set from database
+    const tick = setInterval(() => {
+      const diff = endRef.current - Date.now()
+      if (diff <= 0) {
+        setCountdown('Closed')
+        setUrgent(false)
+        setVotingOpen(false)
+        // STATE 3 — voting closed; only non-voters get the banner
+        if (!votedRef.current) setNotifState('closed')
+        return
+      }
+      const h = Math.floor(diff / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      setCountdown(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
+      setUrgent(diff < 2 * 3600 * 1000)
+
+      // ── In-app banner state machine (reads live values via refs) ──
+      if (votingOpenRef.current) {
+        if (diff <= 3600000 && !votedRef.current) {
+          // STATE 2 — closing soon, non-voter (urgent, cannot dismiss)
+          if (notifStateRef.current !== 'closing') setNotifState('closing')
+        } else if (diff > 3600000 && notifStateRef.current === 'none') {
+          // STATE 1 — voting just opened (once per session)
+          if (sessionStorage.getItem('gt_voting_opened_shown') !== 'true') {
+            setNotifState('opened')
+          }
+        }
+      }
+    }, 1000)
+
+    const handleClick = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotif(false)
+      }
     }
-  }
-  document.addEventListener('click', handleClick)
+    document.addEventListener('click', handleClick)
     return () => {
       clearInterval(tick)
       document.removeEventListener('click', handleClick)
     }
-}, [])
+  }, [])
 
   const doLogout = async () => {
     clearSessionActivity()
@@ -578,7 +561,6 @@ const [votingOpen, setVotingOpen] = useState(true)
                 </button>
               )}
             </div>
-          
 
             {/* Meet the Candidates — hidden when admin disables candidate profiles */}
             {showProfiles && (
