@@ -15,7 +15,6 @@ export default function DashboardPage() {
     name: string
     faculty: string
     voted: boolean
-    receiptCode: string | null
   } | null>(null)
 
   const [leaderboard, setLeaderboard] = useState<{
@@ -37,6 +36,7 @@ export default function DashboardPage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [notifAccordion, setNotifAccordion] = useState(false)
   const [barWidths, setBarWidths] = useState<number[]>([])
+  const [leaderboardReady, setLeaderboardReady] = useState(false)
   const [turnoutOffset, setTurnoutOffset] = useState(163.36)
   const endRef = useRef(Date.now() + 14 * 3600 * 1000)
   const notifRef = useRef<HTMLDivElement>(null)
@@ -132,7 +132,6 @@ export default function DashboardPage() {
           name: profile.full_name,
           faculty: profile.faculty,
           voted: hasVoted,
-          receiptCode: null,
         })
 
         // ── Load election settings ──────────────────────────────────────
@@ -163,35 +162,41 @@ export default function DashboardPage() {
         // the corrective migration (§8 and §9). get_overall_turnout() and
         // get_faculty_turnout() are security definer functions that return
         // only aggregates — no individual ballot or identity data is exposed.
-        const { data: turnout } = await supabase
-          .rpc('get_overall_turnout')
-
-        const { data: facultyTurnout } = await supabase
-          .rpc('get_faculty_turnout')
+        const [{ data: turnout }, { data: facultyTurnout }] = await Promise.all([
+          supabase.rpc('get_overall_turnout'),
+          supabase.rpc('get_faculty_turnout'),
+        ])
 
         if (turnout?.[0]) {
           const totalReg = Number(turnout[0].registered)
           const pct = Number(turnout[0].turnout_pct)
 
-          const sorted = (facultyTurnout ?? [])
-            .sort((a: any, b: any) => b.registered - a.registered)
-            .map((f: any, i: number) => ({
-              name: String(f.faculty).replace('Faculty of ', ''),
-              pct,
-              total: Number(f.registered),
-              rank: i + 1,
-            }))
-
-          setLeaderboard(sorted)
           setTotalRegistered(totalReg)
           setTurnoutPct(pct)
 
           setTimeout(() => {
-            setBarWidths(sorted.map(() => pct))
             const circumference = 163.36
             setTurnoutOffset(circumference - (pct / 100) * circumference)
           }, 400)
         }
+
+        // get_faculty_turnout() returns real per-faculty turnout and suppresses
+        // any faculty with fewer than 10 registrations — so zero rows is a
+        // legitimate answer, not a pending one. Rank by actual turnout, with
+        // registration count breaking ties.
+        const ranked = (facultyTurnout ?? [])
+          .map((f: any) => ({
+            name: String(f.faculty).replace('Faculty of ', ''),
+            pct: Number(f.turnout_pct),
+            total: Number(f.registered),
+          }))
+          .sort((a: any, b: any) => b.pct - a.pct || b.total - a.total)
+          .map((f: any, i: number) => ({ ...f, rank: i + 1 }))
+
+        setLeaderboard(ranked)
+        setLeaderboardReady(true)
+
+        setTimeout(() => setBarWidths(ranked.map((f: any) => f.pct)), 400)
 
         const params = new URLSearchParams(window.location.search)
         if (params.get('voted') === 'true') launchConfetti()
@@ -540,17 +545,9 @@ export default function DashboardPage() {
             {/* Vote button */}
             <div className="dash-vote-wrap">
               {user.voted ? (
-                <>
-                  <button className="dash-voted-btn">
-                    <CheckSquare size={16} />Already Voted
-                  </button>
-                  {user.receiptCode && (
-                    <div className="dash-receipt">
-                      <div className="dash-receipt-label">Your Receipt Code</div>
-                      <div className="dash-receipt-code">{user.receiptCode}</div>
-                    </div>
-                  )}
-                </>
+                <button className="dash-voted-btn">
+                  <CheckSquare size={16} />Already Voted
+                </button>
               ) : !votingOpen ? (
                 <button className="dash-voted-btn" style={{ background: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.3)', color: '#EF4444', cursor: 'not-allowed' }}>
                   <X size={16} />Voting is Closed
@@ -588,9 +585,17 @@ export default function DashboardPage() {
             <div className="dash-lb-wrap">
               <div className="dash-section-title">Faculty Leaderboard</div>
               <div className="dash-lb-card">
-                {leaderboard.length === 0 ? (
+                {!leaderboardReady ? (
                   <div style={{ textAlign: 'center', padding: '1.5rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
                     Loading leaderboard...
+                  </div>
+                ) : leaderboard.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '1.5rem 1.25rem', color: 'rgba(255,255,255,0.45)', fontSize: '0.82rem', lineHeight: 1.6 }}>
+                    <div style={{ color: '#C9A227', fontWeight: 800, marginBottom: '5px' }}>
+                      No faculty rankings yet
+                    </div>
+                    A faculty appears here once at least 10 of its students have
+                    registered. Rankings will fill in as registration grows.
                   </div>
                 ) : (
                   leaderboard.map((f, i) => (

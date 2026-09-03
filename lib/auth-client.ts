@@ -1,5 +1,10 @@
 import { createClient } from '@/lib/supabase/client'
-import { hashStudentId } from '@/lib/auth'
+
+// Note: there is deliberately no hashStudentId here any more. The identity
+// hash is derived in-database by handle_new_user() from a pepper the client
+// never sees. A second implementation in TypeScript could only ever diverge
+// from it — which is exactly what happened: /api/send-reminders re-hashed with
+// NEXT_PUBLIC_HASH_SALT, matched nothing, and silently failed open.
 
 export async function registerStudent({
   studentId,
@@ -16,19 +21,20 @@ export async function registerStudent({
 }) {
   const supabase = createClient()
   const email = `${studentId.toLowerCase().trim()}@live.gctu.edu.gh`
-  const hash = await hashStudentId(studentId)
 
   const { data, error: signUpError } = await supabase.auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`,
+      // student_id_hash is NOT sent. handle_new_user() derives it in-database
+      // from student_id; a client-supplied hash was ignored, and passing one
+      // only invited someone to later trust the wrong value.
       data: {
         student_id: studentId.toUpperCase().trim(),
         full_name: fullName,
         faculty,
         level,
-        student_id_hash: hash,
       }
     }
   })
@@ -43,41 +49,10 @@ export async function registerStudent({
   return data
 }
 
-export async function createStudentProfile({
-  userId,
-  studentId,
-  fullName,
-  email,
-  faculty,
-  level,
-}: {
-  userId: string
-  studentId: string
-  fullName: string
-  email: string
-  faculty: string
-  level: string
-}) {
-  const supabase = createClient()
-
-  const { error: profileError } = await supabase
-    .from('students')
-    .insert({
-      id: userId,
-      student_id: studentId.toUpperCase().trim(),
-      full_name: fullName,
-      email,
-      faculty,
-      level,
-    })
-  if (profileError) throw profileError
-
-  const hash = await hashStudentId(studentId)
-  const { error: registryError } = await supabase
-    .from('voter_registry')
-    .insert({ student_id_hash: hash, has_voted: false })
-  if (registryError) throw registryError
-}
+// createStudentProfile() was removed. It inserted into students and
+// voter_registry straight from the browser, which the corrective migration's
+// RLS no longer permits — and both rows are created by handle_new_user()
+// anyway. Nothing imported it.
 
 export async function loginStudent(email: string, password: string) {
   const supabase = createClient()
@@ -91,11 +66,8 @@ export async function signOut() {
   await supabase.auth.signOut({ scope: 'global' })
 }
 
-export async function saveReceiptToSession(receiptCode: string) {
-  const supabase = createClient()
-  await supabase.auth.updateUser({
-    data: { receipt_code: receiptCode }
-  })
-}
-
-export { hashStudentId } from '@/lib/auth'
+// saveReceiptToSession() was removed deliberately. It wrote the ballot
+// receipt into auth.users.raw_user_meta_data, which the corrective migration
+// stripped precisely so a receipt cannot be recovered after submission. The
+// receipt is now shown once, on the ballot success screen, and kept only in
+// the student's own browser storage.

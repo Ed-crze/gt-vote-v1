@@ -38,6 +38,14 @@ function getPwStrength(pw: string) {
 const STRENGTH_LABEL = ['', 'Weak', 'Fair', 'Good', 'Strong']
 const STRENGTH_COLOR = ['', '#EF4444', '#F59E0B', '#3B82F6', '#22C55E']
 
+// The only three faculties that exist. These strings must stay exactly as
+// written — a foreign key on students.faculty will match against them.
+const FACULTIES = [
+  'Faculty of Computing and Information Systems',
+  'Faculty of IT Business',
+  'Faculty of Engineering',
+]
+
 export default function RegisterPage() {
   const router = useRouter()
   const { navigateTo, fadingOut } = useNavigate()
@@ -46,6 +54,7 @@ export default function RegisterPage() {
   const [studentId, setStudentId]   = useState('')
   const [fullName, setFullName]     = useState('')
   const [email, setEmail]           = useState('')
+  const [faculty, setFaculty]       = useState('')
   const [password, setPassword]     = useState('')
   const [confirm, setConfirm]       = useState('')
   const [showPw, setShowPw]         = useState(false)
@@ -89,8 +98,11 @@ export default function RegisterPage() {
 
  async function handleSubmit() {
   setError('')
-  if (!studentId || !fullName || !email || !password || !confirm) {
+  if (!studentId || !fullName || !email || !faculty || !password || !confirm) {
     setError('Please fill in all fields.'); triggerShake(); return
+  }
+  if (!FACULTIES.includes(faculty)) {
+    setError('Please select your faculty.'); triggerShake(); return
   }
   if (!email.endsWith('@live.gctu.edu.gh')) {
     setError('Please use your GCTU email (e.g. 4211xxxxxx@live.gctu.edu.gh)'); triggerShake(); return
@@ -108,7 +120,7 @@ export default function RegisterPage() {
       studentId,
       password,
       fullName,
-      faculty: 'Faculty of Information Technology', // update when you add faculty field
+      faculty,
       level: '',
     })
     setEmail(studentId.toLowerCase().trim() + '@live.gctu.edu.gh')
@@ -259,7 +271,7 @@ async function handleResend() {
                 <line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
               <span>
-                Your name, faculty and programme will be fetched automatically from the GCTU system using your <strong>Student ID</strong>.
+                Use your <strong>Student ID</strong> and the GCTU email issued with it. Select the faculty you are registered under.
               </span>
             </div>
 
@@ -315,6 +327,31 @@ async function handleResend() {
               />
             </div>
 
+            {/* Faculty */}
+            <div className="register-form-group">
+              <label className="register-label">Faculty</label>
+              <select
+                value={faculty}
+                onChange={e => setFaculty(e.target.value)}
+                className="form-input"
+                tabIndex={4}
+                style={{
+                  cursor: 'pointer',
+                  color: faculty ? '#1B2A5E' : '#9CA3AF',
+                  appearance: 'none',
+                  backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231B2A5E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>\")",
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 12px center',
+                  paddingRight: '38px',
+                }}
+              >
+                <option value="" disabled>Select your faculty</option>
+                {FACULTIES.map(f => (
+                  <option key={f} value={f} style={{ color: '#1B2A5E' }}>{f}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Create Password */}
             <div className="register-form-group">
               <label className="register-label">Create Password</label>
@@ -326,7 +363,7 @@ async function handleResend() {
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                   placeholder="Create a strong password"
                   className="form-input pw-input"
-                  tabIndex={4}
+                  tabIndex={5}
                 />
                 <button type="button" onClick={() => setShowPw(!showPw)} className="pw-toggle">
                   <EyeIcon />
@@ -358,7 +395,7 @@ async function handleResend() {
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                   placeholder="Re-enter your password"
                   className="form-input pw-input"
-                  tabIndex={5}
+                  tabIndex={6}
                 />
                 <button type="button" onClick={() => setShowCfm(!showCfm)} className="pw-toggle">
                   <EyeIcon />

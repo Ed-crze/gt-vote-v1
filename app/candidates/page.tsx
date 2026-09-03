@@ -56,23 +56,10 @@ export default function CandidatesPage() {
       setIsLoggedIn(!!user)
 
       if (user) {
-        // Has this voter already voted?
-        const { data: profile } = await supabase
-          .from('students')
-          .select('student_id')
-          .eq('id', user.id)
-          .single()
-
-        if (profile) {
-          const { hashStudentId } = await import('@/lib/auth-client')
-          const hash = await hashStudentId(profile.student_id)
-          const { data: registry } = await supabase
-            .from('voter_registry')
-            .select('has_voted')
-            .eq('student_id_hash', hash)
-            .single()
-          setHasVoted(registry?.has_voted ?? false)
-        }
+        // Has this voter already voted? voter_registry is no longer directly
+        // readable — has_current_user_voted() derives the voter from auth.uid().
+        const { data: votedStatus } = await supabase.rpc('has_current_user_voted')
+        setHasVoted(votedStatus ?? false)
 
         // Is the election actually open? (same logic as the dashboard)
         const { data: settings } = await supabase

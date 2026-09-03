@@ -1,7 +1,6 @@
 const { createClient } = require('@supabase/supabase-js')
 const fs = require('fs')
 const path = require('path')
-const crypto = require('crypto')
 
 // Manually read .env.local since Next.js uses its own env loader
 const envPath = path.join(__dirname, '.env.local')
@@ -62,13 +61,9 @@ function generateName(index) {
   return `${first} ${last}`
 }
 
-// ⚠️ IMPORTANT: this must match whatever hashing logic your actual signup
-// flow uses to populate student_id_hash elsewhere in your app (same
-// algorithm, same salt/pepper if any). Find that logic in your codebase
-// and replace this function's body if it differs.
-function hashStudentId(studentId) {
-  return crypto.createHash('sha256').update(studentId).digest('hex')
-}
+// NOTE: no local hashing here any more. The rewritten handle_new_user()
+// trigger derives student_id_hash in-database from student_id, so the
+// metadata below only needs to carry student_id itself.
 
 async function seedStudents() {
   console.log('🌱 Starting student seed...')
@@ -83,7 +78,6 @@ async function seedStudents() {
     const faculty = FACULTIES[i % FACULTIES.length]
     const level = LEVELS[i % LEVELS.length]
     const email = `${studentId}@dummy.gctu.edu.gh`
-    const studentIdHash = hashStudentId(studentId)
 
     try {
       const { data, error } = await supabase.auth.admin.createUser({
@@ -95,7 +89,6 @@ async function seedStudents() {
           full_name: fullName,
           faculty,
           level,
-          student_id_hash: studentIdHash,
         }
       })
 

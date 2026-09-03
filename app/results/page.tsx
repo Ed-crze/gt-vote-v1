@@ -38,6 +38,7 @@ export default function ResultsPage() {
   const { navigateTo, fadingOut } = useNavigate()
   const [positions, setPositions] = useState<PositionResult[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [barsReady, setBarsReady] = useState(false)
 
   useEffect(() => {
@@ -66,17 +67,39 @@ export default function ResultsPage() {
         return
       }
 
-      // Aggregate-only: candidates + ballot tallies. No link to voter_registry.
-      const { data: candidateData } = await supabase
-        .from('candidates')
-        .select('id, full_name, position, faculty, avatar_url')
-        .order('position')
+      // Tallies come from get_results(). The ballots table is admin-read only,
+      // so counting it from the browser silently returned zero rows for every
+      // candidate — wrong numbers rather than a visible failure.
+      // get_results() raises RESULTS_NOT_PUBLISHED unless show_results is true
+      // or the caller is an admin; the gate above normally prevents that, but
+      // an admin flipping the toggle mid-session can still race it.
+      const [{ data: candidateData }, { data: tallies, error: tallyError }] = await Promise.all([
+        supabase
+          .from('candidates')
+          .select('id, full_name, position, faculty, avatar_url')
+          .order('position'),
+        supabase.rpc('get_results'),
+      ])
 
-      const { data: ballots } = await supabase
-        .from('ballots')
-        .select('position, candidate_id')
+      if (tallyError) {
+        setLoadError(
+          tallyError.message?.includes('RESULTS_NOT_PUBLISHED')
+            ? 'Results have not been published yet. Please check back once the Electoral Commission releases them.'
+            : 'Results could not be loaded right now. Please refresh in a moment.'
+        )
+        setLoading(false)
+        return
+      }
 
       if (candidateData) {
+        // Vote counts keyed by candidate. Building from the candidates table
+        // rather than from the tally rows keeps candidates who received zero
+        // votes on the page instead of dropping them.
+        const voteByCandidate = new Map<string, number>()
+        for (const row of (tallies ?? []) as any[]) {
+          voteByCandidate.set(String(row.candidate_id), Number(row.votes))
+        }
+
         const allPositions = Array.from(new Set(candidateData.map(c => c.position)))
         const orderedPositions = [
           ...POSITION_ORDER.filter(p => allPositions.includes(p)),
@@ -84,12 +107,13 @@ export default function ResultsPage() {
         ]
 
         const grouped = orderedPositions.map(posTitle => {
-          const posBallots = (ballots ?? []).filter(b => b.position === posTitle)
-          const total = posBallots.length
-          const candidates = candidateData
-            .filter(c => c.position === posTitle)
+          const posCandidates = candidateData.filter(c => c.position === posTitle)
+          const total = posCandidates.reduce(
+            (sum, c) => sum + (voteByCandidate.get(c.id) ?? 0), 0
+          )
+          const candidates = posCandidates
             .map(c => {
-              const votes = posBallots.filter(b => b.candidate_id === c.id).length
+              const votes = voteByCandidate.get(c.id) ?? 0
               const pct = total > 0 ? Math.round((votes / total) * 100) : 0
               return {
                 id: c.id,
@@ -173,6 +197,18 @@ export default function ResultsPage() {
                 borderRadius: '50%', marginBottom: '12px',
               }} />
               <div>Loading results...</div>
+            </div>
+          ) : loadError ? (
+            <div style={{
+              textAlign: 'center', padding: '2.5rem 1.5rem', margin: '0 auto', maxWidth: '420px',
+              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.28)',
+              borderRadius: '14px', color: 'rgba(255,255,255,0.7)',
+              fontSize: '0.85rem', lineHeight: 1.6,
+            }}>
+              <div style={{ color: '#EF4444', fontWeight: 800, marginBottom: '6px' }}>
+                Results unavailable
+              </div>
+              {loadError}
             </div>
           ) : positions.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem', color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem' }}>

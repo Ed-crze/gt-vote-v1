@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { hashStudentId, saveReceiptToSession } from '@/lib/auth-client'
 import { useNavigate } from '@/lib/hooks'
 
 type Candidate = {
@@ -34,6 +33,61 @@ function getInitials(name: string) {
   return name.split(' ').slice(0, 2).map(n => n[0]).join('')
 }
 
+// Exceptions raised by submit_vote(p_votes jsonb). Longest token first —
+// ALREADY_VOTED_OR_NOT_REGISTERED contains NOT_REGISTERED as a substring.
+const SUBMIT_ERRORS: [string, string][] = [
+  ['NOT_AUTHENTICATED', 'Your session has expired. Please sign in again, then cast your ballot.'],
+  ['NO_VOTES_SUBMITTED', 'No selections reached the server. Please choose a candidate for every position and try again.'],
+  ['ELECTION_CLOSED', 'Voting is now closed. Your ballot was not submitted.'],
+  ['INVALID_CANDIDATE', 'One of your selections is no longer a valid candidate. Reload the page and select again.'],
+  ['RECEIPT_GENERATION_FAILED', 'Your ballot could not be finalised. Nothing was recorded — please try again.'],
+  ['NOT_REGISTERED', 'You are not on the voter register for this election. Please contact the Electoral Commission.'],
+]
+
+function messageForSubmitError(raw: string) {
+  for (const [token, message] of SUBMIT_ERRORS) {
+    if (raw.includes(token)) return message
+  }
+  return 'Something went wrong submitting your ballot. Please try again.'
+}
+
+// ── Replay protection (client half) ───────────────────────────────────────
+// A nonce is persisted BEFORE the RPC fires. If the response is lost to a
+// dropped connection, the retry comes back ALREADY_VOTED_OR_NOT_REGISTERED —
+// the marker tells us that ballot was almost certainly ours, so we report it
+// as recorded instead of silently bouncing the student to the dashboard.
+// Once p_request_id exists server-side the same nonce makes the retry return
+// the original receipt instead (see the fallback in submitBallot).
+const REQUEST_KEY = 'gt_vote_request_id'
+const RECEIPT_KEY = 'gt_receipt'
+
+// Returns the nonce to send plus whether an earlier attempt was left
+// unresolved. isRetry is true only when a previous submission never received
+// an answer — that is the one case where a later ALREADY_VOTED response may
+// be describing our own ballot.
+function beginRequest(): { id: string; isRetry: boolean } {
+  try {
+    const existing = localStorage.getItem(REQUEST_KEY)
+    if (existing) return { id: existing, isRetry: true }
+    const id = crypto.randomUUID()
+    localStorage.setItem(REQUEST_KEY, id)
+    return { id, isRetry: false }
+  } catch {
+    return { id: crypto.randomUUID(), isRetry: false }
+  }
+}
+
+function clearRequest() {
+  try { localStorage.removeItem(REQUEST_KEY) } catch {}
+}
+
+function persistReceipt(code: string) {
+  // localStorage first — it is the only copy that survives a tab close, and
+  // the receipt can never be recovered from the server again.
+  try { localStorage.setItem(RECEIPT_KEY, code) } catch {}
+  try { sessionStorage.setItem(RECEIPT_KEY, code) } catch {}
+}
+
 export default function BallotPage() {
   const { navigateTo, fadingOut } = useNavigate()
 
@@ -56,6 +110,8 @@ export default function BallotPage() {
   const [receiptCode, setReceiptCode] = useState('')
   const [copied, setCopied] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [receiptSaved, setReceiptSaved] = useState(false)
+  const [receiptLost, setReceiptLost] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -74,15 +130,11 @@ export default function BallotPage() {
 
       if (!profile) { navigateTo('/login'); return }
 
-      // Check if already voted
-      const hash = await hashStudentId(profile.student_id)
-      const { data: registry } = await supabase
-        .from('voter_registry')
-        .select('has_voted')
-        .eq('student_id_hash', hash)
-        .single()
+      // Check if already voted. voter_registry is no longer directly readable;
+      // has_current_user_voted() derives the voter from auth.uid() server-side.
+      const { data: hasVoted } = await supabase.rpc('has_current_user_voted')
 
-      if (registry?.has_voted) { navigateTo('/dashboard'); return }
+      if (hasVoted) { navigateTo('/dashboard'); return }
 
       setUser({
         id: authUser.id,
@@ -174,46 +226,81 @@ export default function BallotPage() {
     try {
       const supabase = createClient()
 
+      // Position is derived server-side from the candidate — send candidate_id only.
       const votes = positions
         .map((pos, i) => {
           if (selections[i] === null) return null
-          const candidate = pos.candidates[selections[i]!]
-          return {
-            candidate_id: candidate.id,
-            position: pos.title,
-          }
+          return { candidate_id: pos.candidates[selections[i]!].id }
         })
         .filter(Boolean)
 
-      const hash = await hashStudentId(user.studentId)
+      const { id: requestId, isRetry } = beginRequest()
 
-      const { data: receipt, error } = await supabase.rpc('submit_vote', {
-        p_student_id_hash: hash,
+      // Try the replay-safe signature first. Until the p_request_id migration
+      // is applied PostgREST answers PGRST202 (no such function), and we fall
+      // back to the single-argument form the live database currently exposes.
+      let { data: receipt, error } = await supabase.rpc('submit_vote', {
         p_votes: votes,
+        p_request_id: requestId,
       })
 
+      if (error && error.code === 'PGRST202') {
+        ;({ data: receipt, error } = await supabase.rpc('submit_vote', {
+          p_votes: votes,
+        }))
+      }
+
+      // A PostgREST error carries a code; a transport failure does not. Only
+      // the latter leaves the outcome genuinely unknown, so only that keeps
+      // the nonce alive for the next attempt to recognise.
+      const answered = !error || !!error.code
+      if (answered) clearRequest()
+
       if (error) {
-        if (error.message?.includes('ALREADY_VOTED')) {
+        if (!error.code) {
+          setSubmitError(
+            'The connection dropped before we heard back, so we cannot tell whether ' +
+            'your ballot was recorded. Check your network and try again — you will ' +
+            'not be counted twice.'
+          )
+          return
+        }
+
+        const raw = error.message ?? ''
+
+        if (raw.includes('ALREADY_VOTED_OR_NOT_REGISTERED')) {
+          // A ballot already exists for this voter. If an earlier attempt was
+          // left unresolved, that ballot is almost certainly ours and only the
+          // response was lost — say so rather than bouncing silently.
+          if (isRetry) {
+            setReceiptLost(true)
+            setReviewOpen(false)
+            setSuccessVisible(true)
+            return
+          }
           navigateTo('/dashboard')
           return
         }
-        throw error
+
+        setSubmitError(messageForSubmitError(raw))
+        return
       }
 
-      await saveReceiptToSession(receipt)
-      sessionStorage.setItem('gt_receipt', receipt)
+      // Persist before anything else can navigate — this is the only copy.
+      persistReceipt(receipt)
 
-    fetch('/api/send-vote-confirmation', { method: 'POST' }).catch(() => {})
-
+      fetch('/api/send-vote-confirmation', { method: 'POST' }).catch(() => {})
 
       setReceiptCode(receipt)
       setReviewOpen(false)
       setSuccessVisible(true)
-      setTimeout(() => navigateTo('/dashboard?voted=true'), 4500)
+      // No automatic redirect — the student must tick "I have saved my
+      // receipt code" before they can leave. The code is unrecoverable.
 
     } catch (err: any) {
+      // Thrown, so no answer was received — the nonce stays put deliberately.
       console.error('Vote submission failed:', err)
-      setSubmitError(err?.message || 'Something went wrong. Please try again.')
+      setSubmitError(messageForSubmitError(err?.message ?? ''))
     } finally {
       setSubmitting(false)
     }
@@ -532,18 +619,113 @@ export default function BallotPage() {
         <div className="ballot-s-sub">
           Your ballot has been recorded.<br />Your identity remains completely anonymous.
         </div>
-        <div className="ballot-receipt" onClick={copyCode} title="Click to copy">
-          <div className="ballot-r-lbl">
-            Ballot Receipt Code &nbsp;
-            <span className="ballot-copy-hint" style={{ color: copied ? '#22C55E' : 'rgba(201,162,39,0.7)' }}>
-              {copied ? 'copied!' : 'tap to copy'}
-            </span>
-          </div>
-          <div className="ballot-r-code">{receiptCode || '------'}</div>
-        </div>
-        <div className="ballot-r-note" style={{ color: copied ? '#22C55E' : undefined }}>
-          {copied ? 'Code copied to clipboard!' : 'Save this code to verify your vote was counted.'}
-        </div>
+
+        {receiptLost ? (
+          /* The ballot landed but the response was lost in transit. Receipts
+             cannot be recovered from the server, so be explicit rather than
+             showing a blank code. */
+          <>
+            <div style={{
+              background: 'rgba(201,162,39,0.1)',
+              border: '1px solid rgba(201,162,39,0.35)',
+              borderRadius: '12px',
+              padding: '14px 16px',
+              width: '100%', maxWidth: '300px',
+              fontSize: '0.78rem', lineHeight: 1.6,
+              color: 'rgba(255,255,255,0.75)',
+              textAlign: 'left',
+            }}>
+              <strong style={{ color: '#C9A227', display: 'block', marginBottom: '4px' }}>
+                Your vote is counted.
+              </strong>
+              The connection dropped before your receipt code reached this device,
+              and receipts cannot be recovered after submission. Your ballot is
+              safely recorded and will be tallied.
+            </div>
+            <button
+              className="ballot-btn-confirm"
+              style={{ maxWidth: '300px' }}
+              onClick={() => navigateTo('/dashboard?voted=true')}
+            >
+              Continue to Dashboard
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="ballot-receipt" style={{ cursor: 'default' }}>
+              <div className="ballot-r-lbl">Ballot Receipt Code</div>
+              <div className="ballot-r-code">{receiptCode || '------'}</div>
+              <button
+                onClick={copyCode}
+                style={{
+                  display: 'block', width: '100%', marginTop: '12px', padding: '10px',
+                  background: copied ? 'rgba(34,197,94,0.15)' : '#C9A227',
+                  border: copied ? '1px solid rgba(34,197,94,0.5)' : 'none',
+                  borderRadius: '9px',
+                  fontFamily: 'Inter, sans-serif', fontSize: '0.78rem', fontWeight: 900,
+                  letterSpacing: '0.05em', textTransform: 'uppercase',
+                  color: copied ? '#22C55E' : '#1B2A5E',
+                  cursor: 'pointer', transition: 'all 0.2s',
+                }}
+              >
+                {copied ? '✓ Copied' : 'Copy Code'}
+              </button>
+            </div>
+
+            <div style={{
+              display: 'flex', gap: '8px', alignItems: 'flex-start',
+              background: 'rgba(239,68,68,0.1)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: '10px',
+              padding: '11px 13px',
+              margin: '14px 0 4px',
+              width: '100%', maxWidth: '300px',
+              fontSize: '0.76rem', lineHeight: 1.5,
+              color: '#EF4444', textAlign: 'left',
+            }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" style={{ flexShrink: 0, marginTop: '1px' }} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span><strong>Save this code now. It cannot be recovered.</strong> No one — not
+              even an administrator — can look it up again after you leave this screen.</span>
+            </div>
+
+            <label style={{
+              display: 'flex', gap: '9px', alignItems: 'center',
+              width: '100%', maxWidth: '300px',
+              margin: '10px 0 2px',
+              fontSize: '0.8rem', fontWeight: 700,
+              color: receiptSaved ? '#C9A227' : 'rgba(255,255,255,0.6)',
+              cursor: 'pointer', textAlign: 'left', transition: 'color 0.2s',
+            }}>
+              <input
+                type="checkbox"
+                checked={receiptSaved}
+                onChange={e => setReceiptSaved(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: '#C9A227', cursor: 'pointer', flexShrink: 0 }}
+              />
+              I have saved my receipt code
+            </label>
+
+            <button
+              className="ballot-btn-confirm"
+              disabled={!receiptSaved}
+              onClick={() => navigateTo('/dashboard?voted=true')}
+              style={{
+                maxWidth: '300px',
+                opacity: receiptSaved ? 1 : 0.4,
+                cursor: receiptSaved ? 'pointer' : 'not-allowed',
+              }}
+            >
+              Continue to Dashboard
+            </button>
+
+            <div className="ballot-r-note">
+              You will need this code to verify your ballot was counted.
+            </div>
+          </>
+        )}
       </div>
     </>
   )

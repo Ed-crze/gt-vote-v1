@@ -6,25 +6,23 @@ import { useNavigate } from '@/lib/hooks'
 
 export default function VerifyPage() {
   const { navigateTo, fadingOut } = useNavigate()
-  const [resultPosition, setResultPosition] = useState('')
+  const [resultPositions, setResultPositions] = useState(0)
   const [code, setCode] = useState('')
   const [status, setStatus] = useState<'idle' | 'found' | 'notfound'>('idle')
   const [resultTime, setResultTime] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Auto-fill from sessionStorage or current user's receipt
+  // Auto-fill from whatever this device kept when the ballot was cast.
+  // There is no server-side fallback — receipts are deliberately
+  // unrecoverable once submitted, so this is the only source.
   useEffect(() => {
-  // Autofill from sessionStorage if available
-  const stored = sessionStorage.getItem('gt_receipt') || ''
-  if (stored) { setCode(formatCode(stored)); return }
-
-  // Otherwise try to get from Supabase session metadata
-  const supabase = createClient()
-  supabase.auth.getUser().then(({ data: { user } }) => {
-    const receipt = user?.user_metadata?.receipt_code
-    if (receipt) setCode(formatCode(receipt))
-  })
-}, [])
+    let stored = ''
+    try { stored = localStorage.getItem('gt_receipt') || '' } catch {}
+    if (!stored) {
+      try { stored = sessionStorage.getItem('gt_receipt') || '' } catch {}
+    }
+    if (stored) setCode(formatCode(stored))
+  }, [])
 
 
   function formatCode(raw: string) {
@@ -47,29 +45,36 @@ export default function VerifyPage() {
   if (clean.length < 12) return
 
   const supabase = createClient()
-  const { data, error } = await supabase.rpc('verify_receipt', {
+
+  // Try the code as displayed, then the un-hyphenated form — the stored
+  // format is a database-side detail and either may be what it holds.
+  let { data, error } = await supabase.rpc('verify_receipt', {
     p_receipt_code: code,
   })
+
+  if (!error && (!data || data.length === 0 || !data[0].is_valid)) {
+    ;({ data, error } = await supabase.rpc('verify_receipt', {
+      p_receipt_code: clean,
+    }))
+  }
 
   if (error || !data || data.length === 0 || !data[0].is_valid) {
     setStatus('notfound')
     return
   }
 
+  // verify_receipt returns (is_valid, positions_recorded, recorded_at).
   const result = data[0]
 
-  const ts = result.verified_at
-    ? new Date(result.verified_at).toLocaleString('en-GB', {
-        day: '2-digit', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit'
-      })
-    : new Date().toLocaleString('en-GB', {
-        day: '2-digit', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit'
-      })
-
-  setResultTime(ts)
-  setResultPosition(result.vote_position ?? '')
+  setResultTime(
+    result.recorded_at
+      ? new Date(result.recorded_at).toLocaleString('en-GB', {
+          day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+        })
+      : '—'
+  )
+  setResultPositions(Number(result.positions_recorded ?? 0))
   setStatus('found')
 }
 
@@ -156,15 +161,17 @@ export default function VerifyPage() {
                   <div className="verify-result-row-val">{code}</div>
                 </div>
                 <div className="verify-result-row">
-                  <div className="verify-result-row-label">Verified At</div>
+                  <div className="verify-result-row-label">Recorded At</div>
                   <div className="verify-result-row-val">{resultTime}</div>
                 </div>
-                {resultPosition && (
-            <div className="verify-result-row">
-             <div className="verify-result-row-label">Position</div>
-          <div className="verify-result-row-val">{resultPosition}</div>
-          </div>
-            )}
+                {resultPositions > 0 && (
+                  <div className="verify-result-row">
+                    <div className="verify-result-row-label">Positions Recorded</div>
+                    <div className="verify-result-row-val">
+                      {resultPositions} {resultPositions === 1 ? 'position' : 'positions'}
+                    </div>
+                  </div>
+                )}
                 <div className="verify-result-row">
                   <div className="verify-result-row-label">Ballot Status</div>
                   <div className="verify-result-row-val verify-counted">Counted</div>

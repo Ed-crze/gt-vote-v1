@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { createServerSideClient } from '@/lib/supabase/server'
-import { hashStudentId } from '@/lib/auth'
 
 export const runtime = 'nodejs' // nodemailer needs the Node runtime, not edge
 
@@ -90,34 +89,56 @@ export async function POST(req: NextRequest) {
         })
       : null
 
-    // All registered students
-    const { data: students, error: studentsErr } = await supabase
-      .from('students')
-      .select('student_id, full_name, email')
+    type Recipient = { full_name: string; email: string }
+    let recipients: Recipient[] = []
 
-    if (studentsErr) {
-      return NextResponse.json({ error: 'Failed to load students' }, { status: 500 })
+    if (type === 'closing') {
+      // Non-voters come from get_non_voter_emails(), which hashes student_id
+      // in-database where the pepper lives. The previous version re-derived the
+      // hash in Node from NEXT_PUBLIC_HASH_SALT — a different pepper entirely,
+      // so no hash ever matched and the filter silently excluded nobody. Every
+      // student who had already voted would have been told they had not.
+      const { data: nonVoters, error: nonVotersErr } = await supabase
+        .rpc('get_non_voter_emails')
+
+      if (nonVotersErr) {
+        // Fail CLOSED. Sending to everyone is exactly the failure mode this
+        // replaced — never fall back to the unfiltered student list here.
+        console.error('get_non_voter_emails failed:', nonVotersErr)
+        return NextResponse.json(
+          {
+            error: nonVotersErr.message?.includes('NOT_AUTHORIZED')
+              ? 'Not authorised to read the non-voter list.'
+              : 'Could not determine who has not voted, so no reminders were sent.',
+          },
+          { status: 502 },
+        )
+      }
+
+      recipients = ((nonVoters ?? []) as Recipient[]).filter(r => r.email)
+    } else {
+      // "opening" goes to everyone — no participation filter needed.
+      const { data: students, error: studentsErr } = await supabase
+        .from('students')
+        .select('full_name, email')
+
+      if (studentsErr) {
+        return NextResponse.json({ error: 'Failed to load students' }, { status: 500 })
+      }
+
+      recipients = ((students ?? []) as Recipient[]).filter(s => s.email)
     }
 
-    let recipients = (students ?? []).filter(s => s.email)
-
-    // For "closing", filter down to non-voters WITHOUT linking to ballots.
-    // We only read the participation registry (has_voted), never ballot content.
-    if (type === 'closing') {
-      const { data: registry } = await supabase
-        .from('voter_registry')
-        .select('student_id_hash, has_voted')
-
-      const votedHashes = new Set(
-        (registry ?? []).filter(r => r.has_voted).map(r => r.student_id_hash)
-      )
-
-      const filtered: typeof recipients = []
-      for (const s of recipients) {
-        const hash = await hashStudentId(s.student_id)
-        if (!votedHashes.has(hash)) filtered.push(s) // not voted (or no registry row)
-      }
-      recipients = filtered
+    if (recipients.length === 0) {
+      return NextResponse.json({
+        sent: 0,
+        total: 0,
+        type,
+        firstError: null,
+        note: type === 'closing'
+          ? 'Every registered student has already voted — no reminders needed.'
+          : 'No students with an email address on file.',
+      })
     }
 
     const transporter = nodemailer.createTransport({
