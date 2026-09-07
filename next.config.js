@@ -23,7 +23,7 @@ const csp = [
 
 const nextConfig = {
   // Hostnames only — no protocol, no port. Covers all ports on that host.
-  allowedDevOrigins: ['192.168.78.1'],
+  allowedDevOrigins: ['100.75.120.112'],
 
   // Strict mode for catching bugs early
   reactStrictMode: true,

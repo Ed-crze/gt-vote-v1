@@ -278,7 +278,7 @@ async function handleResend() {
       setError('')
     }}
     onKeyDown={e => e.key === 'Enter' && handleLogin()}
-    placeholder="Student ID e.g. 4211xxxxxx"
+    placeholder="Your index number"
     className="form-input"
     autoComplete="off"
   />

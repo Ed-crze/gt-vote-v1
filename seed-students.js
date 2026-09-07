@@ -50,9 +50,13 @@ const LAST_NAMES = [
 const TOTAL_STUDENTS = 50
 const PASSWORD = 'GtVote@2025'
 
+// Index number prefixes vary by faculty and intake year — seed a mix so test
+// data does not bake in a single one.
+const ID_PREFIXES = ['3311', '4211', '5011']
+
 function generateStudentId(index) {
-  const base = 4211230300 + index
-  return base.toString()
+  const prefix = ID_PREFIXES[index % ID_PREFIXES.length]
+  return prefix + String(230300 + index)
 }
 
 function generateName(index) {

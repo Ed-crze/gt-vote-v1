@@ -5,9 +5,9 @@ const CURRENT_USER_KEY = 'gtvote_current_user'
 const BALLOTS_KEY = 'gtvote_ballots'
 
 const DEMO_ACCOUNTS: Student[] = [
-  { id: '3311230001', password: 'Admin123!', name: 'Klah Edward Owusu',  faculty: 'Faculty of Information Technology', level: '400', voted: false, receiptCode: null },
-  { id: '4211230002', password: 'Admin123!', name: 'Edwin Komla Safo',   faculty: 'Faculty of Information Technology', level: '400', voted: false, receiptCode: null },
-  { id: '5011230003', password: 'Admin123!', name: 'Lord Amprofi',       faculty: 'Faculty of Information Technology', level: '400', voted: false, receiptCode: null },
+  { id: '4211230035', password: 'Admin123!', name: 'Klah Edward Owusu',  faculty: 'Faculty of Information Technology', level: '400', voted: false, receiptCode: null },
+  { id: '4211230217', password: 'Admin123!', name: 'Edwin Komla Safo',   faculty: 'Faculty of Information Technology', level: '400', voted: false, receiptCode: null },
+  { id: '4211231044', password: 'Admin123!', name: 'Lord Amprofi',       faculty: 'Faculty of Information Technology', level: '400', voted: false, receiptCode: null },
 ]
 
 function isBrowser() {

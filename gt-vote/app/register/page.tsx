@@ -2,10 +2,10 @@
 import React, { useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { GTV } from '@/lib/store'
 import { useNavigate } from '@/lib/hooks'
-import { registerStudent } from '@/lib/auth-client'
-import { createClient } from '@/lib/supabase/client'
 
+const DEMO_OTP = '123456'
 
 function EyeIcon() {
   return (
@@ -38,14 +38,6 @@ function getPwStrength(pw: string) {
 const STRENGTH_LABEL = ['', 'Weak', 'Fair', 'Good', 'Strong']
 const STRENGTH_COLOR = ['', '#EF4444', '#F59E0B', '#3B82F6', '#22C55E']
 
-// The only three faculties that exist. These strings must stay exactly as
-// written — a foreign key on students.faculty will match against them.
-const FACULTIES = [
-  'Faculty of Computing and Information Systems',
-  'Faculty of IT Business',
-  'Faculty of Engineering',
-]
-
 export default function RegisterPage() {
   const router = useRouter()
   const { navigateTo, fadingOut } = useNavigate()
@@ -54,14 +46,13 @@ export default function RegisterPage() {
   const [studentId, setStudentId]   = useState('')
   const [fullName, setFullName]     = useState('')
   const [email, setEmail]           = useState('')
-  const [faculty, setFaculty]       = useState('')
   const [password, setPassword]     = useState('')
   const [confirm, setConfirm]       = useState('')
   const [showPw, setShowPw]         = useState(false)
   const [showCfm, setShowCfm]       = useState(false)
 
   // UI state
-  const [step, setStep]             = useState<'form' | 'confirm' | 'otp' | 'success'>('form')
+  const [step, setStep]             = useState<'form' | 'otp' | 'success'>('form')
   const [error, setError]           = useState('')
   const [shake, setShake]           = useState(false)
   const [loading, setLoading]       = useState(false)
@@ -75,10 +66,6 @@ export default function RegisterPage() {
   const [otpAnimating, setOtpAnimating] = useState<boolean[]>([false,false,false,false,false,false])
 
   const strength = getPwStrength(password)
-
-  // The address the OTP will actually go to. Built exactly the way
-  // registerStudent() builds it, so what the student confirms is what is sent.
-  const constructedEmail = studentId.toLowerCase().trim().split('@')[0] + '@live.gctu.edu.gh'
 
   function triggerShake() {
     setShake(true)
@@ -100,59 +87,32 @@ export default function RegisterPage() {
     }, 100)
   }
 
- function handleSubmit() {
-  setError('')
-  if (!studentId || !fullName || !email || !faculty || !password || !confirm) {
-    setError('Please fill in all fields.'); triggerShake(); return
+  function handleSubmit() {
+    setError('')
+    if (!studentId || !fullName || !email || !password || !confirm) {
+      setError('Please fill in all fields.'); triggerShake(); return
+    }
+    if (!email.endsWith('@live.gctu.edu.gh')) {
+      setError('Please use your GCTU email (e.g. 4211xxxxxx@live.gctu.edu.gh)'); triggerShake(); return
+    }
+    if (password !== confirm) {
+      setError('Passwords do not match.'); triggerShake(); return
+    }
+    if (strength < 2) {
+      setError('Password is too weak. Please choose a stronger password.'); triggerShake(); return
+    }
+    const students = GTV.getStudents()
+    const existingId = students.find((s: { id: string }) => s.id === studentId)
+    if (existingId) {
+      setError('An account with this Student ID already exists.'); triggerShake(); return
+    }
+    const existingEmail = students.find((s) => s.email === email)
+    if (existingEmail) {
+      setError('An account with this email address already exists.'); triggerShake(); return
+    }
+    setLoading(true)
+    setTimeout(() => { setLoading(false); setStep('otp'); startCountdown() }, 1200)
   }
-  if (!FACULTIES.includes(faculty)) {
-    setError('Please select your faculty.'); triggerShake(); return
-  }
-  if (!email.endsWith('@live.gctu.edu.gh')) {
-    setError('Please use your GCTU email (yourindexnumber@live.gctu.edu.gh)'); triggerShake(); return
-  }
-  if (password !== confirm) {
-    setError('Passwords do not match.'); triggerShake(); return
-  }
-  if (strength < 2) {
-    setError('Password is too weak. Please choose a stronger password.'); triggerShake(); return
-  }
-
-  // Nothing is sent yet — show the constructed address and wait for an explicit
-  // confirmation, so a mistyped index number does not burn an OTP send.
-  setStep('confirm')
- }
-
- async function doRegister() {
-  setError('')
-  setLoading(true)
-  try {
-    await registerStudent({
-      studentId,
-      password,
-      fullName,
-      faculty,
-      level: '',
-    })
-    setEmail(studentId.toLowerCase().trim() + '@live.gctu.edu.gh')
-    // Supabase sends the OTP email — move to OTP step
-    setStep('otp')
-    startCountdown()
-  } catch (err: any) {
-  console.error('Registration error full details:', err)
-  console.error('Error message:', err.message)
-  console.error('Error code:', err.code)
-  if (err.message?.includes('already registered') || err.message?.includes('duplicate')) {
-    setError('An account with this email or Student ID already exists.')
-  } else {
-    setError(err.message || 'Registration failed. Please try again.')
-  }
-  triggerShake()
-} finally {
-  setLoading(false)
-}
- }
-
 
   function handleOtpInput(idx: number, val: string) {
     const digits = val.replace(/[^0-9]/g, '')
@@ -207,47 +167,34 @@ export default function RegisterPage() {
     if (e.key === 'Enter') doVerify(otp)
   }
 
- async function doVerify(otpArr: string[]) {
-  const code = otpArr.join('')
-  if (code.length < 6) { setOtpError(true); triggerShake(); return }
-
-  setOtpLoading(true)
-  try {
-    const supabase = createClient()
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token: code,
-      type: 'signup',
-    })
-
-    if (error) {
-      setOtpLoading(false)
-      setOtpError(true)
-      triggerShake()
-      return
-    }
-
-    setStep('success')
-    setTimeout(() => navigateTo('/login?id=' + studentId), 2500)
-  } catch {
-    setOtpLoading(false)
-    setOtpError(true)
-    triggerShake()
+  function doVerify(otpArr: string[]) {
+    const code = otpArr.join('')
+    if (code.length < 6) { setOtpError(true); triggerShake(); return }
+    setOtpLoading(true)
+    setTimeout(() => {
+      if (code === DEMO_OTP) {
+        GTV.register({
+          id: studentId, password, name: fullName, email,
+          faculty: 'Faculty of Information Technology', level: '', voted: false, receiptCode: null
+        })
+        setStep('success')
+        setTimeout(() => navigateTo('/login?id=' + studentId), 2500)
+      } else {
+        setOtpLoading(false)
+        setOtpError(true)
+        triggerShake()
+      }
+    }, 900)
   }
-}
 
-async function handleResend() {
-  setOtp(['', '', '', '', '', ''])
-  setOtpError(false)
-
-  const supabase = createClient()
-  await supabase.auth.resend({ type: 'signup', email })
-
-  startCountdown()
-}
+  function handleResend() {
+    setOtp(['', '', '', '', '', ''])
+    setOtpError(false)
+    startCountdown()
+  }
 
   return (
-    <div className={`min-h-[100dvh] flex flex-col items-center justify-center p-4 py-8 gap-3 ${fadingOut ? 'content-fade-out' : 'content-fade-in'}`}>
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 py-8 gap-3 ${fadingOut ? 'content-fade-out' : 'content-fade-in'}`}>
 
       {/* Back button */}
       <div className="w-full flex justify-end" style={{ maxWidth: '380px' }}>
@@ -259,7 +206,7 @@ async function handleResend() {
 
         {/* Header */}
         <div className="register-header">
-          <Image src="/gctu-crest.png" alt="GCTU" width={54} height={54} className="object-contain flex-shrink-0"  loading="eager" priority/>
+          <Image src="/gctu-crest.png" alt="GCTU" width={54} height={54} className="object-contain flex-shrink-0" />
           <div>
             <div className="register-uni-name">Ghana Communication<br />Technology University</div>
             <div className="register-uni-tagline">Knowledge Comes from Learning</div>
@@ -272,7 +219,7 @@ async function handleResend() {
             <h1 className="register-title">
               Create your <span className="register-title-accent">GT-Vote</span> Account
             </h1>
-            <p className="register-subtitle">For Students who have not registered </p>
+            <p className="register-subtitle">For L100, L200 and Graduate Students</p>
 
             {/* Info note */}
             <div className="register-info-note">
@@ -282,7 +229,7 @@ async function handleResend() {
                 <line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
               <span>
-                Use your <strong>Student ID</strong> and the GCTU email issued with it. Select the faculty you are registered under.
+                Your name, faculty and programme will be fetched automatically from the GCTU system using your <strong>Student ID</strong>.
               </span>
             </div>
 
@@ -302,7 +249,7 @@ async function handleResend() {
                 value={studentId}
                 onChange={e => setStudentId(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                placeholder="Your index number"
+                placeholder="Student ID e.g. 4211xxxxxx"
                 className="form-input"
                 tabIndex={1}
                 autoComplete="username"
@@ -331,36 +278,11 @@ async function handleResend() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                placeholder="yourindexnumber@live.gctu.edu.gh"
+                placeholder="e.g. 4211xxxxxx@live.gctu.edu.gh"
                 className="form-input"
                 tabIndex={3}
                 autoComplete="email"
               />
-            </div>
-
-            {/* Faculty */}
-            <div className="register-form-group">
-              <label className="register-label">Faculty</label>
-              <select
-                value={faculty}
-                onChange={e => setFaculty(e.target.value)}
-                className="form-input"
-                tabIndex={4}
-                style={{
-                  cursor: 'pointer',
-                  color: faculty ? '#1B2A5E' : '#9CA3AF',
-                  appearance: 'none',
-                  backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%231B2A5E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>\")",
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 12px center',
-                  paddingRight: '38px',
-                }}
-              >
-                <option value="" disabled>Select your faculty</option>
-                {FACULTIES.map(f => (
-                  <option key={f} value={f} style={{ color: '#1B2A5E' }}>{f}</option>
-                ))}
-              </select>
             </div>
 
             {/* Create Password */}
@@ -374,7 +296,7 @@ async function handleResend() {
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                   placeholder="Create a strong password"
                   className="form-input pw-input"
-                  tabIndex={5}
+                  tabIndex={4}
                 />
                 <button type="button" onClick={() => setShowPw(!showPw)} className="pw-toggle">
                   <EyeIcon />
@@ -406,7 +328,7 @@ async function handleResend() {
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                   placeholder="Re-enter your password"
                   className="form-input pw-input"
-                  tabIndex={6}
+                  tabIndex={5}
                 />
                 <button type="button" onClick={() => setShowCfm(!showCfm)} className="pw-toggle">
                   <EyeIcon />
@@ -438,74 +360,7 @@ async function handleResend() {
           </div>
         )}
 
-        {/* ── STEP 2: Confirm the email the code will be sent to ── */}
-        {step === 'confirm' && (
-          <div className="register-body" style={{ animation: 'fadeUp 0.3s ease' }}>
-            <div className="register-otp-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                <polyline points="22,6 12,13 2,6"/>
-              </svg>
-            </div>
-
-            <h2 className="register-title">
-              Confirm your <span className="register-title-accent">Email</span>
-            </h2>
-
-            {error && (
-              <div className="register-error" style={{ marginTop: '1rem' }}>
-                <WarningIcon />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <p className="register-otp-sent" style={{ marginTop: '1rem', marginBottom: '0.75rem' }}>
-              We&apos;ll send a verification code to
-            </p>
-
-            <div style={{
-              fontFamily: 'monospace',
-              fontSize: '0.95rem',
-              fontWeight: 700,
-              color: '#1B2A5E',
-              background: '#F0F4FF',
-              border: '1px solid #D0D8F0',
-              borderRadius: '8px',
-              padding: '10px 12px',
-              textAlign: 'center',
-              wordBreak: 'break-all',
-              marginBottom: '0.75rem',
-            }}>
-              {constructedEmail}
-            </div>
-
-            <p className="register-otp-sent" style={{ marginBottom: '1.5rem' }}>
-              Is this correct?
-            </p>
-
-            <button onClick={doRegister} disabled={loading} className="btn-signin">
-              {loading
-                ? <span className="flex items-center justify-center gap-2">
-                    <span className="spin" style={{ display: 'inline-block', width: '15px', height: '15px', border: '2px solid rgba(255,255,255,0.35)', borderTopColor: '#fff', borderRadius: '50%' }} />
-                    Sending code...
-                  </span>
-                : 'YES, SEND THE CODE'
-              }
-            </button>
-
-            <p className="forgot-text" style={{ marginTop: '1rem', textAlign: 'center' }}>
-              <button
-                onClick={() => { setStep('form'); setError('') }}
-                className="forgot-link"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', padding: 0 }}
-              >
-                ← Go back and edit
-              </button>
-            </p>
-          </div>
-        )}
-
-        {/* ── STEP 3: OTP Verification ── */}
+        {/* ── STEP 2: OTP Verification ── */}
         {step === 'otp' && (
           <div className="register-body" style={{ animation: 'fadeUp 0.3s ease' }}>
             <div className="register-otp-icon">
@@ -531,7 +386,7 @@ async function handleResend() {
                 <span>
                   {otp.join('').length < 6
                     ? 'Please enter the full 6-digit code.'
-                    : 'Incorrect code. Please check your email and try again.'}
+                    : 'Incorrect code. Hint: use 123456 to test.'}
                 </span>
               </div>
             )}
@@ -569,13 +424,6 @@ async function handleResend() {
               </button>
             </p>
 
-            {/* Persistent help — shown always, not only after a failure */}
-            <p className="register-otp-sent" style={{ fontSize: '0.74rem', marginBottom: '1.25rem' }}>
-              Didn&apos;t receive the code? Check that your index number is correct and that your
-              GCTU email has been activated. You can check your inbox at{' '}
-              <strong style={{ color: '#1B2A5E' }}>outlook.office.com</strong>.
-            </p>
-
             {/* Verify button */}
             <button onClick={() => doVerify(otp)} disabled={otpLoading} className="btn-signin">
               {otpLoading
@@ -599,7 +447,7 @@ async function handleResend() {
           </div>
         )}
 
-        {/* ── STEP 4: Success ── */}
+        {/* ── STEP 3: Success ── */}
         {step === 'success' && (
           <div className="login-success">
             <div className="pop-in login-success-icon">✓</div>

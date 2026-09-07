@@ -102,7 +102,7 @@ export default function ForgotPasswordPage() {
               value={studentId}
               onChange={e => { setStudentId(e.target.value); setError('') }}
               onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-              placeholder="e.g. 4211xxxxxx"
+              placeholder="Your index number"
               className="form-input"
               autoComplete="off"
               autoFocus
