@@ -10,6 +10,12 @@ import {
   readSharedActivity,
   clearSessionActivity,
 } from '@/lib/useInactivityTimeout'
+import {
+  STUDENT_TIMEOUT_MS,
+  STUDENT_WARNING_MS,
+  ADMIN_TIMEOUT_MS,
+  ADMIN_WARNING_MS,
+} from '@/lib/sessionTimeouts'
 import InactivityWarning from './InactivityWarning'
 
 // Mirrors the route split in proxy.ts. Note /admin is the admin *login* page and
@@ -31,10 +37,8 @@ function isPublicRoute(pathname: string) {
   return PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(`${p}/`))
 }
 
-const STUDENT_TIMEOUT_MS = 30 * 60 * 1000
-const STUDENT_WARNING_MS = 2 * 60 * 1000
-const ADMIN_TIMEOUT_MS = 15 * 60 * 1000
-const ADMIN_WARNING_MS = 60 * 1000
+// The four timeout values now live in lib/sessionTimeouts.ts — single place to
+// change them for a demonstration, single place to restore them afterwards.
 
 type Role = 'unknown' | 'none' | 'student' | 'admin'
 
