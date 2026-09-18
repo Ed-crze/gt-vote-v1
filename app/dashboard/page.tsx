@@ -146,15 +146,22 @@ export default function DashboardPage() {
           setShowResults(settings.show_results ?? false)
           setShowProfiles(settings.show_profiles ?? true)
 
+          const timeExpired = settings.end_time
+            ? new Date(settings.end_time).getTime() < Date.now()
+            : false
           if (settings.end_time) {
             endRef.current = new Date(settings.end_time).getTime()
-            const timeExpired = new Date(settings.end_time).getTime() < Date.now()
-            // Open only if admin enabled it AND time hasn't expired
-            setVotingOpen((settings.is_open ?? false) && !timeExpired)
-            if (timeExpired) setCountdown('Closed')
-          } else {
-            setVotingOpen(settings.is_open ?? false)
           }
+
+          // Open only if admin enabled it AND time hasn't expired
+          const open = (settings.is_open ?? false) && !timeExpired
+          setVotingOpen(open)
+          votingOpenRef.current = open
+
+          // A poll the admin has closed has no time left to show, however far
+          // off end_time still is. Without this the clock kept running beside
+          // the "Voting has ended" panel.
+          if (!open) setCountdown('Closed')
         }
 
         // ── Load turnout via secure aggregate functions ─────────────────
@@ -213,13 +220,23 @@ export default function DashboardPage() {
 
     // Countdown timer — reads from endRef which is now set from database
     const tick = setInterval(() => {
+      // Election state wins over the clock: once voting is closed there is
+      // nothing to count down to, whatever end_time says.
+      if (!votingOpenRef.current) {
+        setCountdown('Closed')
+        setUrgent(false)
+        // STATE 3 — voting closed; only non-voters get the banner
+        if (!votedRef.current && notifStateRef.current !== 'closed') setNotifState('closed')
+        return
+      }
       const diff = endRef.current - Date.now()
       if (diff <= 0) {
         setCountdown('Closed')
         setUrgent(false)
         setVotingOpen(false)
+        votingOpenRef.current = false
         // STATE 3 — voting closed; only non-voters get the banner
-        if (!votedRef.current) setNotifState('closed')
+        if (!votedRef.current && notifStateRef.current !== 'closed') setNotifState('closed')
         return
       }
       const h = Math.floor(diff / 3600000)

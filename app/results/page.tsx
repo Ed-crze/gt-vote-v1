@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { Trophy, ArrowLeft } from 'lucide-react'
+import { Trophy, TrendingUp, ArrowLeft } from 'lucide-react'
 import { useNavigate } from '@/lib/hooks'
 import { createClient } from '@/lib/supabase/client'
+import { largestRemainderPercentages } from '@/lib/percentages'
 import PageBackground from '@/components/PageBackground'
 
 type ResultCandidate = {
@@ -40,6 +41,9 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [barsReady, setBarsReady] = useState(false)
+  // Drives provisional vs final wording. True means the Electoral Commission
+  // has not closed the poll, so every figure on this page can still move.
+  const [pollOpen, setPollOpen] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -61,6 +65,11 @@ export default function ResultsPage() {
         : false
       const votingOpen = (settings?.is_open ?? false) && !timeExpired
       const showResults = settings?.show_results ?? false
+
+      // The wording follows is_open on its own, not votingOpen: end_time
+      // passing does not close the poll, only the admin toggle does. A tally
+      // read while is_open is still true is provisional whatever the clock says.
+      setPollOpen(settings?.is_open ?? false)
 
       if (votingOpen || !showResults) {
         navigateTo('/dashboard')
@@ -111,19 +120,19 @@ export default function ResultsPage() {
           const total = posCandidates.reduce(
             (sum, c) => sum + (voteByCandidate.get(c.id) ?? 0), 0
           )
-          const candidates = posCandidates
-            .map(c => {
-              const votes = voteByCandidate.get(c.id) ?? 0
-              const pct = total > 0 ? Math.round((votes / total) * 100) : 0
-              return {
-                id: c.id,
-                name: c.full_name,
-                faculty: c.faculty ?? '',
-                avatar_url: c.avatar_url ?? null,
-                votes,
-                pct,
-              }
-            })
+          // Percentages are allocated across the whole position at once, in the
+          // candidates' original order, so the displayed figures sum to exactly
+          // 100 instead of drifting to 101 the way per-candidate rounding did.
+          const tallied = posCandidates.map(c => ({
+            id: c.id,
+            name: c.full_name,
+            faculty: c.faculty ?? '',
+            avatar_url: c.avatar_url ?? null,
+            votes: voteByCandidate.get(c.id) ?? 0,
+          }))
+          const pcts = largestRemainderPercentages(tallied.map(c => c.votes))
+          const candidates = tallied
+            .map((c, i) => ({ ...c, pct: pcts[i] }))
             .sort((a, b) => b.votes - a.votes)
           return { title: posTitle, total, candidates }
         })
@@ -179,13 +188,13 @@ export default function ResultsPage() {
               fontSize: '0.62rem', fontWeight: 800, color: '#C9A227',
               textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '0.5rem',
             }}>
-              🏁 Final Results
+              {pollOpen ? '🔴 Live Results' : '🏁 Final Results'}
             </div>
             <h1 style={{ fontSize: '1.6rem', fontWeight: 900, color: '#fff', lineHeight: 1.1, marginBottom: '0.4rem' }}>
               Election Results
             </h1>
             <p style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.5)' }}>
-              2025 / 2026 SRC Elections — official tally
+              2025 / 2026 SRC Elections — {pollOpen ? 'provisional tally' : 'official tally'}
             </p>
           </div>
 
@@ -239,7 +248,9 @@ export default function ResultsPage() {
                   </div>
                 ) : (
                   pos.candidates.map((c, ci) => {
-                    const isWinner = ci === 0 && c.votes > 0
+                    // While the poll is open this is whoever is ahead right now,
+                    // not a winner — the badge says so, matching the PDF's LEAD.
+                    const isLeader = ci === 0 && c.votes > 0
                     return (
                       <div key={c.id} style={{ marginBottom: ci === pos.candidates.length - 1 ? 0 : '0.9rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
@@ -247,7 +258,7 @@ export default function ResultsPage() {
                           <div style={{
                             width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
                             background: 'rgba(201,162,39,0.15)',
-                            border: `1.5px solid ${isWinner ? '#C9A227' : 'rgba(255,255,255,0.15)'}`,
+                            border: `1.5px solid ${isLeader ? '#C9A227' : 'rgba(255,255,255,0.15)'}`,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             overflow: 'hidden',
                             fontSize: '0.75rem', fontWeight: 800, color: '#C9A227',
@@ -263,7 +274,7 @@ export default function ResultsPage() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                               <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>{c.name}</span>
-                              {isWinner && (
+                              {isLeader && (
                                 <span style={{
                                   display: 'inline-flex', alignItems: 'center', gap: '3px',
                                   fontSize: '0.55rem', fontWeight: 800,
@@ -271,7 +282,9 @@ export default function ResultsPage() {
                                   color: '#C9A227', padding: '1px 7px', borderRadius: '999px',
                                   textTransform: 'uppercase', letterSpacing: '0.04em',
                                 }}>
-                                  <Trophy size={9} /> Winner
+                                  {pollOpen
+                                    ? <><TrendingUp size={9} /> Lead</>
+                                    : <><Trophy size={9} /> Winner</>}
                                 </span>
                               )}
                             </div>
@@ -282,7 +295,7 @@ export default function ResultsPage() {
 
                           {/* Count + pct */}
                           <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                            <div style={{ fontSize: '0.85rem', fontWeight: 900, color: isWinner ? '#C9A227' : '#fff' }}>{c.pct}%</div>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 900, color: isLeader ? '#C9A227' : '#fff' }}>{c.pct}%</div>
                             <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.4)' }}>{c.votes} vote{c.votes === 1 ? '' : 's'}</div>
                           </div>
                         </div>
@@ -292,7 +305,7 @@ export default function ResultsPage() {
                           <div style={{
                             height: '100%', borderRadius: '3px',
                             width: barsReady ? `${c.pct}%` : '0%',
-                            background: isWinner ? 'linear-gradient(to right, #C9A227, #f0d060)' : '#fff',
+                            background: isLeader ? 'linear-gradient(to right, #C9A227, #f0d060)' : '#fff',
                             transition: 'width 1.2s ease',
                           }} />
                         </div>

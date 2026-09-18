@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { largestRemainderPercentages } from '@/lib/percentages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic' // never statically cached — these are live counts
@@ -68,22 +69,23 @@ export async function GET() {
     const isOpen = Boolean(settings?.is_open) && !timeExpired
 
     const facultyCounts: Record<string, number> = {}
-    let totalWithFaculty = 0
     facultyRes.data?.forEach(s => {
       if (s.faculty) {
         facultyCounts[s.faculty] = (facultyCounts[s.faculty] || 0) + 1
-        totalWithFaculty++
       }
     })
 
-    const faculties = Object.entries(facultyCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({
-        // strip the prefix so long GCTU names fit the mobile bar row
-        name: name.replace('Faculty of ', ''),
-        count,
-        pct: totalWithFaculty > 0 ? Math.round((count / totalWithFaculty) * 100) : 0,
-      }))
+    // Share of registrations per faculty. Allocated in one pass with largest
+    // remainder so the published figures sum to exactly 100 instead of to 101 —
+    // rounding each faculty on its own used to let them drift apart.
+    const facultyEntries = Object.entries(facultyCounts).sort((a, b) => b[1] - a[1])
+    const facultyPcts = largestRemainderPercentages(facultyEntries.map(([, count]) => count))
+    const faculties = facultyEntries.map(([name, count], i) => ({
+      // strip the prefix so long GCTU names fit the mobile bar row
+      name: name.replace('Faculty of ', ''),
+      count,
+      pct: facultyPcts[i],
+    }))
 
     return NextResponse.json({
       registeredVoters,

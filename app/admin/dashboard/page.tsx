@@ -3,8 +3,19 @@ import { useState, useEffect, useRef } from 'react'
 import { Send, RefreshCw, Users, FileText, Zap, TrendingUp, Clock, CheckSquare, BarChart2 } from 'lucide-react'
 import AdminNav from '@/components/AdminNav'
 import { createClient } from '@/lib/supabase/client'
-import { POSITIONS } from '@/lib/data'
+import { largestRemainderPercentages } from '@/lib/percentages'
 import { useNavigate } from '@/lib/hooks'
+
+// Known positions render in this order; anything else the admin has created is
+// appended after them. Same list, same purpose as app/results/page.tsx.
+const POSITION_ORDER = [
+  'President',
+  'Vice President',
+  'General Secretary',
+  'Financial Secretary',
+  "Women's Commissioner",
+  'Sports Officer',
+]
 
 export default function AdminDashboardPage() {
   const { navigateTo, fadingOut } = useNavigate()
@@ -16,20 +27,20 @@ export default function AdminDashboardPage() {
  const [totalVoters, setTotalVoters] = useState(0)
 const [votesCast, setVotesCast] = useState(0)
 const [turnout, setTurnout] = useState(0)
+// Starts empty and is filled from the candidates table below. It used to be
+// seeded from the hardcoded POSITIONS list in lib/data.ts, which meant this
+// panel and the PDF rendered a candidate roster that had nothing to do with the
+// database as soon as anyone added or renamed a candidate in the admin panel.
 const [resultsData, setResultsData] = useState<{
   title: string
   total: number
-  candidates: { name: string; votes: number; pct: number }[]
-}[]>(
-  // Initialize with real positions and zero votes — no hardcoded data
-  POSITIONS.map(pos => ({
-    title: pos.title,
-    total: 0,
-    candidates: pos.candidates.map(c => ({ name: c.name, votes: 0, pct: 0 }))
-  }))
-)
+  candidates: { id: string; name: string; votes: number; pct: number }[]
+}[]>([])
 const [votingOpen, setVotingOpen] = useState(false)
 const endRef = useRef(Date.now() + 5 * 3600 * 1000)
+// Live mirror of votingOpen for the countdown tick, whose setInterval closure
+// is created once ([] deps) and would otherwise read the initial value forever.
+const votingOpenRef = useRef(false)
 const [facultyTurnout, setFacultyTurnout] = useState<{ name: string; pct: number }[]>([])
 const [sendingReminder, setSendingReminder] = useState<'opening' | 'closing' | null>(null)
 const autoPublishedRef = useRef(false)
@@ -73,72 +84,90 @@ useEffect(() => {
     if (settings) {
       if (settings.announcement) setAnnText(settings.announcement)
 
-      if (settings.end_time) {
-        endRef.current = new Date(settings.end_time).getTime()
-        const timeExpired = new Date(settings.end_time).getTime() < Date.now()
-        // Voting open only if admin set it open AND time hasn't expired
-        setVotingOpen(settings.is_open && !timeExpired)
-        if (timeExpired) setCountdown('Closed')
-      } else {
-        // No end time set — just use is_open
-        setVotingOpen(settings.is_open)
+      const timeExpired = settings.end_time
+        ? new Date(settings.end_time).getTime() < Date.now()
+        : false
+      if (settings.end_time) endRef.current = new Date(settings.end_time).getTime()
+
+      // Voting open only if admin set it open AND time hasn't expired
+      const open = Boolean(settings.is_open) && !timeExpired
+      setVotingOpen(open)
+      votingOpenRef.current = open
+
+      // A closed poll has no time left to show, however far off end_time is.
+      // Manually closing voting used to leave the clock running next to the
+      // "Voting is currently CLOSED" panel.
+      if (!open) setCountdown('Closed')
+    }
+
+// Real per-faculty turnout, from the same security-definer aggregate the
+// student dashboard reads. This block used to count students per faculty and
+// then hand EVERY faculty the single overall turnout figure, so the bars were
+// always identical no matter how the faculties actually differed.
+// get_faculty_turnout() suppresses any faculty with fewer than 10
+// registrations, so zero rows is a legitimate answer rather than a pending one.
+const { data: facultyTurnoutRows } = await supabase.rpc('get_faculty_turnout')
+
+const sorted = (facultyTurnoutRows ?? [])
+  .map((f: any) => ({
+    name: String(f.faculty).replace('Faculty of ', ''),
+    pct: Number(f.turnout_pct),
+    registered: Number(f.registered),
+  }))
+  // Rank by actual turnout, with registration count breaking ties.
+  .sort((a: any, b: any) => b.pct - a.pct || b.registered - a.registered)
+  .map(({ name, pct }: { name: string; pct: number }) => ({ name, pct }))
+
+setFacultyTurnout(sorted)
+
+
+    // Live results per position. The roster comes from the candidates table —
+    // the same source app/results/page.tsx reads — so this panel, the public
+    // results page and the PDF can no longer disagree about who is standing.
+    const [{ data: candidateData }, { data: ballots }] = await Promise.all([
+      supabase
+        .from('candidates')
+        .select('id, full_name, position')
+        .order('position'),
+      supabase
+        .from('ballots')
+        .select('position, candidate_id'),
+    ])
+
+    if (candidateData) {
+      const voteByCandidate = new Map<string, number>()
+      for (const b of ballots ?? []) {
+        const key = String(b.candidate_id)
+        voteByCandidate.set(key, (voteByCandidate.get(key) ?? 0) + 1)
       }
-    }
 
-// Real faculty turnout
-const { data: facultyData } = await supabase
-  .from('students')
-  .select('faculty')
+      const allPositions = Array.from(new Set(candidateData.map(c => c.position)))
+      const orderedPositions = [
+        ...POSITION_ORDER.filter(p => allPositions.includes(p)),
+        ...allPositions.filter(p => !POSITION_ORDER.includes(p)),
+      ]
 
-const { data: registryData } = await supabase
-  .from('voter_registry')
-  .select('has_voted')
-
-if (facultyData && registryData) {
-  const totalReg = facultyData.length
-  const totalVotes = Math.min(
-    registryData.filter(r => r.has_voted).length,
-    totalReg
-  )
-  const overallPct = totalReg > 0
-    ? Math.min(Math.round((totalVotes / totalReg) * 100), 100)
-    : 0
-
-  const facultyCounts: Record<string, number> = {}
-  facultyData.forEach(s => {
-    if (s.faculty) {
-      facultyCounts[s.faculty] = (facultyCounts[s.faculty] || 0) + 1
-    }
-  })
-
-  const sorted = Object.entries(facultyCounts)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, count]) => ({
-      name: name.replace('Faculty of ', ''),
-      pct: overallPct,
-    }))
-
-  setFacultyTurnout(sorted)
-}
-
-
-    // Get live results per position
-    const { data: ballots } = await supabase
-      .from('ballots')
-      .select('position, candidate_id')
-
-    if (ballots) {
-      const results = POSITIONS.map(pos => {
-        const positionBallots = ballots.filter(b => b.position === pos.title)
-        const total = positionBallots.length
-        const candidates = pos.candidates.map(c => {
-          const votes = positionBallots.filter(b => b.candidate_id === c.id).length
-          const pct = total > 0 ? Math.round((votes / total) * 100) : 0
-          return { name: c.name, votes, pct }
-        })
-        // Sort by votes descending
-        candidates.sort((a, b) => b.votes - a.votes)
-        return { title: pos.title, total, candidates }
+      const results = orderedPositions.map(posTitle => {
+        const posCandidates = candidateData.filter(c => c.position === posTitle)
+        const voteCounts = posCandidates.map(c => voteByCandidate.get(c.id) ?? 0)
+        // Total is the sum of this position's own candidates rather than a raw
+        // ballot count, so the "N votes" header and the percentages under it
+        // always agree — a ballot for a since-deleted candidate cannot inflate
+        // the header past what the rows add up to.
+        const total = voteCounts.reduce((sum, v) => sum + v, 0)
+        // Percentages are allocated across the position in one pass so the
+        // displayed figures sum to exactly 100 rather than to 101.
+        const pcts = largestRemainderPercentages(voteCounts)
+        const candidates = posCandidates
+          .map((c, i) => ({
+            id: c.id,
+            name: c.full_name,
+            votes: voteCounts[i],
+            pct: pcts[i],
+          }))
+          // Sort by votes descending
+          .sort((a, b) => b.votes - a.votes)
+        return { title: posTitle, total, candidates }
       })
       setResultsData(results)
     }
@@ -150,10 +179,17 @@ if (facultyData && registryData) {
 
   // Countdown timer
 const interval = setInterval(() => {
+  // Election state wins over the clock: once is_open is false there is nothing
+  // to count down to, so show Closed rather than a running end_time.
+  if (!votingOpenRef.current) {
+    setCountdown('Closed')
+    return
+  }
   const diff = endRef.current - Date.now()
   if (diff <= 0) {
     setCountdown('Closed')
     setVotingOpen(false)
+    votingOpenRef.current = false
     // Auto-close in the database and publish results (once) when time expires
     if (!autoPublishedRef.current) {
       autoPublishedRef.current = true
@@ -192,6 +228,8 @@ async function handleVotingToggle() {
 
   if (!error) {
     setVotingOpen(newState)
+    votingOpenRef.current = newState
+    if (!newState) setCountdown('Closed')
     showToast(newState ? 'Voting opened' : 'Voting closed — results published')
   } else {
     showToast('Failed to update voting status')
@@ -370,7 +408,18 @@ async function handleVotingToggle() {
             <TrendingUp size={14} color="#C9A227" className="verify-icon-inline" /> Live Results
           </div>
           <div className="fade-up-3">
-            {resultsData.map(pos => (
+            {resultsData.length === 0 ? (
+              <div className="admin-pos-result">
+                <div style={{
+                  textAlign: 'center',
+                  padding: '1rem',
+                  fontSize: '0.8rem',
+                  color: 'rgba(255,255,255,0.3)',
+                }}>
+                  No candidates have been added yet.
+                </div>
+              </div>
+            ) : resultsData.map(pos => (
              <div key={pos.title} className="admin-pos-result">
   <div className="admin-pos-res-title">
     {pos.title} <span>{pos.total} votes</span>
@@ -386,7 +435,7 @@ async function handleVotingToggle() {
     </div>
   ) : (
     pos.candidates.map((c, ci) => (
-      <div key={c.name} className="admin-cand-result">
+      <div key={c.id} className="admin-cand-result">
         <div className="admin-cand-head">
           <div className="admin-cand-name">
             {c.name}
@@ -416,7 +465,7 @@ async function handleVotingToggle() {
           <div className="admin-fac-card fade-up-3">
             {facultyTurnout.length === 0 ? (
               <div className="admin-fac-row">
-                <div className="admin-fac-name">No registered students yet</div>
+                <div className="admin-fac-name">Not enough registrations to report faculty turnout yet</div>
               </div>
             ) : facultyTurnout.map(f => (
               <div key={f.name} className="admin-fac-row">

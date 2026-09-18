@@ -1,9 +1,12 @@
 import jsPDF from 'jspdf'
+import { largestRemainderPercentages } from '@/lib/percentages'
 
+// Percentages are derived here from the vote counts rather than taken from the
+// caller, so the exported figures are internally consistent whichever screen
+// triggered the export.
 type CandidateResult = {
   name: string
   votes: number
-  pct: number
 }
 
 type PositionResult = {
@@ -98,9 +101,16 @@ export function generateResultsPDF({
     doc.text(`${pos.total} vote${pos.total !== 1 ? 's' : ''}`, pageWidth - 18, y + 7, { align: 'right' })
     y += 14
 
-    // Candidates
-    for (let i = 0; i < pos.candidates.length; i++) {
-      const c = pos.candidates[i]
+    // Candidates — ranked by votes, highest first. The caller's array is React
+    // state upstream, so copy before sorting; the LEAD badge and the bold row
+    // below both assume index 0 is the front runner.
+    const pcts = largestRemainderPercentages(pos.candidates.map(c => c.votes))
+    const ranked = pos.candidates
+      .map((c, i) => ({ name: c.name, votes: c.votes, pct: pcts[i] }))
+      .sort((a, b) => b.votes - a.votes)
+
+    for (let i = 0; i < ranked.length; i++) {
+      const c = ranked[i]
       const isLeader = i === 0
 
       // Row background
